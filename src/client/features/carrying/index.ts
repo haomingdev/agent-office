@@ -9,6 +9,7 @@ import type { Ctx, Hint } from '../../core/context';
 import { aside, key } from '../../core/hint';
 import { store } from '../../state';
 import { issuePrompt } from '../../ui/github/prompts';
+import { issueRef } from '../../ui/forge';
 import { closeAllModals, h, toast } from '../../ui/dom';
 import { issueMeeting, type MeetingPreset } from '../../ui/meeting';
 import { worktreePref } from '../../ui/prompt';
@@ -56,17 +57,17 @@ export function installCarrying(ctx: Ctx, deps: CarryingDeps) {
     deps.dropBall();
     const carrying = ctx.carrying();
     if (carrying?.issue === it.number) return;
-    if (carrying) toast(`📌 #${carrying.issue} went back on the board`);
+    if (carrying) toast(`📌 ${issueRef(carrying.issue)} went back on the board`);
     setCarrying({ issue: it.number, title: it.title });
     ctx.sound.paper();
-    toast(`✋ You took #${it.number} off the board: take it to an empty desk, a worker or the 📋 queue and press E`);
+    toast(`✋ You took ${issueRef(it.number)} off the board: take it to an empty desk, a worker or the 📋 queue and press E`);
   }
 
   /** Q, or E at the issues board: the card goes back where it came from. */
   function putBack() {
     const carrying = ctx.carrying();
     if (!carrying) return;
-    toast(`📌 #${carrying.issue} is back on the board`);
+    toast(`📌 ${issueRef(carrying.issue)} is back on the board`);
     setCarrying(null);
     ctx.sound.paper();
   }
@@ -93,10 +94,10 @@ export function installCarrying(ctx: Ctx, deps: CarryingDeps) {
     }
     const prompt = issuePrompt({ number: card.issue, title: card.title });
     if (it.kind === 'queue') {
-      if (onQueue(card.issue)) toast(`#${card.issue} is already on the queue`, 'warn');
+      if (onQueue(card.issue)) toast(`${issueRef(card.issue)} is already on the queue`, 'warn');
       else {
         const { provider, model, effort } = officeChoice(store.project);
-        ctx.net.send({ t: 'queue.add', prompt, title: `#${card.issue} ${card.title}`, issue: card.issue, provider, model, effort });
+        ctx.net.send({ t: 'queue.add', prompt, title: `${issueRef(card.issue)} ${card.title}`, issue: card.issue, provider, model, effort });
         putDown();
       }
       return true;
@@ -157,9 +158,9 @@ export function installCarrying(ctx: Ctx, deps: CarryingDeps) {
 
   /** With an issue card in your hands: what E does with it here, and how to put it back. */
   function carryHint(card: CarriedIssue, it: Interactable | null): Hint {
-    const parts = (...mid: (HTMLElement | string)[]) => [h('span.title', {}, `🗂️ #${card.issue} in hand`), ...mid, key('Q', 'Put it back')];
+    const parts = (...mid: (HTMLElement | string)[]) => [h('span.title', {}, `🗂️ ${issueRef(card.issue)} in hand`), ...mid, key('Q', 'Put it back')];
     const aimedNote = deps.aimedNote();
-    if (it?.kind === 'issues') return aimedNote ? { k: String(aimedNote.number), parts: parts(key('E', `Swap it for #${aimedNote.number}`)) } : { k: '', parts: parts(key('E', 'Pin it back up')) };
+    if (it?.kind === 'issues') return aimedNote ? { k: String(aimedNote.number), parts: parts(key('E', `Swap it for ${issueRef(aimedNote.number)}`)) } : { k: '', parts: parts(key('E', 'Pin it back up')) };
     if (it?.kind === 'ball') return { k: 'ball', parts: parts(aside('🏀 hands full')) };
     if (it?.kind === 'queue') {
       const on = onQueue(card.issue);

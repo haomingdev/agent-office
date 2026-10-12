@@ -1,4 +1,5 @@
 import { forgeWords, type ForgeWords } from '../../shared/floors';
+import { issueRef as refOf } from '../../shared/jira';
 import { store } from '../state';
 
 /**
@@ -13,4 +14,9 @@ export function words(): ForgeWords {
 export function prName(n: number): string {
   const w = words();
   return `${w.pr} ${w.ref}${n}`;
+}
+
+/** What issue `n` on the board is called: #12, or a Jira ticket's key (CHAT-123). */
+export function issueRef(n: number): string {
+  return refOf(store.issues.items, n);
 }

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { GhIssue, GhPull, GhState, QueueState, QueueTask, ServiceInfo, WorkerInfo } from '../../../shared/protocol';
 import { store, workerForPull } from '../../state';
-import { prName, words } from '../../ui/forge';
+import { issueRef, prName, words } from '../../ui/forge';
 
 export const NOTE_COLORS = ['#fff7b0', '#ffd6e0', '#caffbf', '#bde0fe', '#ffe5b4'];
 export const PINS = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166'];
@@ -151,7 +151,7 @@ export class BoardTexture {
       const w = this.kind === 'pulls' && workers ? workerForPull(workers.values(), it as GhPull) : undefined;
       const footer = w ? fs * 1.3 : 0;
       g.font = `900 ${Math.round(fs * 1.35)}px Nunito, ui-rounded, system-ui, sans-serif`;
-      g.fillText(`${this.kind === 'pulls' ? words().ref : '#'}${it.number}`, -nw / 2 + 14, -nh / 2 + fs * 2);
+      g.fillText(this.kind === 'pulls' ? `${words().ref}${it.number}` : issueRef(it.number), -nw / 2 + 14, -nh / 2 + fs * 2);
       g.font = `700 ${fs}px Nunito, ui-rounded, system-ui, sans-serif`;
       wrap(g, it.title, nw - 28, Math.max(2, Math.floor((nh - fs * 3 - footer) / (fs * 1.1)))).forEach((line, li) => g.fillText(line, -nw / 2 + 14, -nh / 2 + fs * 3.4 + li * fs * 1.1));
       if (w) {
@@ -289,7 +289,11 @@ export class QueueBoardTexture {
   }
 
   render(state: QueueState, workers: Map<string, WorkerInfo>) {
-    const name = (t: QueueTask) => (t.issue !== undefined ? `#${t.issue}  ${t.title.replace(new RegExp(`^#${t.issue}\\s*`), '')}` : t.title);
+    const name = (t: QueueTask) => {
+      if (t.issue === undefined) return t.title;
+      const ref = issueRef(t.issue);
+      return `${ref}  ${t.title.startsWith(ref) ? t.title.slice(ref.length).trimStart() : t.title}`;
+    };
     const running = state.tasks.filter((t) => t.status === 'running');
     const queued = state.tasks.filter((t) => t.status === 'queued');
     const done = state.tasks.filter((t) => t.status === 'done').slice(-3).reverse();

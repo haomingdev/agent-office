@@ -6,6 +6,7 @@ import { gitlabProject } from '../../shared/floors';
 import { h, openModal, type Modal } from './dom';
 import { confirmDialog } from './prompt';
 import { copyButton } from './team';
+import { jiraCard } from './jira/signin';
 
 const NAMES: Record<SignInKind, string> = { claude: 'Claude', github: 'GitHub', gitlab: 'GitLab' };
 const ICONS: Record<SignInKind, string> = { claude: '✳️', github: '🐙', gitlab: '🦊' };
@@ -50,6 +51,9 @@ export function openSignIns(net: Net, why?: string) {
     gitlab: h('input', { type: 'password', placeholder: 'glpat-…', 'aria-label': 'GitLab token', autocomplete: 'off', spellcheck: 'false' }) as HTMLInputElement,
     host: h('input', { type: 'text', placeholder: 'gitlab.example.com', 'aria-label': 'Which GitLab', autocomplete: 'off', spellcheck: 'false', style: 'max-width:14em' }) as HTMLInputElement,
   };
+
+  // Jira's own card: an email and API token rather than a sign-in the office runs (see jira/signin.ts).
+  const jira = jiraCard(net);
 
   const say = (text?: string) => {
     banner.hidden = !text;
@@ -156,12 +160,12 @@ export function openSignIns(net: Net, why?: string) {
     const typing = document.activeElement;
     cards.replaceChildren();
     if (!s) {
-      cards.append(h('p.empty', {}, store.me.account ? 'Loading…' : 'On the shared office password, workers run on the office’s own sign-ins.'));
+      cards.append(h('p.empty', {}, store.me.account ? 'Loading…' : 'On the shared office password, workers run on the office’s own sign-ins.'), jira.el);
       return;
     }
     // GitLab only once there's a GitLab floor (or a GitLab sign-in already).
     const lab = !!gitlabHost() || s.gitlab.status !== 'none' || s.gitlab.how === 'office';
-    cards.append(card('claude', s.claude, s.office), card('github', s.github, s.office), lab ? card('gitlab', s.gitlab, s.office) : '');
+    cards.append(card('claude', s.claude, s.office), card('github', s.github, s.office), lab ? card('gitlab', s.gitlab, s.office) : '', jira.el);
     if (typing instanceof HTMLInputElement && Object.values(inputs).includes(typing) && typing.isConnected) typing.focus();
     // Once they're all sorted, whatever sent you here is too.
     if (s.claude.status === 'ok' && s.github.status === 'ok' && (!lab || s.gitlab.status === 'ok')) say();
@@ -171,6 +175,7 @@ export function openSignIns(net: Net, why?: string) {
   const modal = openModal(el, {
     onClose: () => {
       unsub();
+      jira.off();
       open = null;
     },
   });

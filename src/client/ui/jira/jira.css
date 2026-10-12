@@ -1,0 +1,55 @@
+/* The Jira board, the ticket window and Jira's rows in ⚙️ Settings (ui/jira/). The board's columns and
+   cards are the issues board's own (boards.css); the ticket window is built like the issue window (windows.css). */
+
+/* The board's header: the filters, then Open in Jira and Refresh, wrapping on a narrow window. */
+.modal.board.jira header { flex-wrap: wrap; row-gap: 8px; }
+.modal.board.jira header h2 { flex: 0 1 auto; }
+.jira-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.jira-pick, .jira-ticket select { max-width: 220px; padding: 6px 9px; border: 2px solid var(--ink); border-radius: 9px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; }
+.jira-ticket select { flex: 0 1 auto; max-width: 100%; min-width: 0; }
+.jira-ticket select:disabled { opacity: .55; cursor: not-allowed; }
+.modal input.jira-search, .jira-ticket input[type=search] { width: 200px; min-width: 0; padding: 6px 9px; border: 2px solid var(--ink); border-radius: 9px; background: #fff; font: inherit; font-size: 13px; outline: none; }
+.modal input.jira-search:focus, .jira-ticket input[type=search]:focus { border-color: var(--accent); }
+a.btn.jira-open { text-decoration: none; }
+
+/* The to-do column is where the cork board on the wall gets its notes from; finished ones are only the recent. */
+.jira-board .column.todo h4 { background: #fff3c4; }
+.jira-board .column.done h4 { background: #d8f5e3; }
+.jira-board .column h4 .col-head { cursor: default; }
+.jira-board .column h4 .col-head:hover { background: none; }
+.jira-note { font-size: 10px; font-weight: 800; color: var(--muted); }
+.jira-board li.empty { color: var(--muted); font-size: 12px; font-weight: 700; text-align: center; list-style: none; }
+
+/* Who a card's ticket is assigned to. */
+.jira-who { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; color: var(--ink); }
+.jira-who.none { color: var(--muted); }
+.jira-who .gh-avatar, .jira-found .gh-avatar, .jira-lane h3 .gh-avatar { width: 18px; height: 18px; font-size: 10px; border-width: 1.5px; }
+
+/* By assignee: a row of the columns for each person. */
+.modal.board .body.jira-board.lanes { flex-direction: column; overflow: auto; }
+.jira-lane { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.jira-lane h3 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 15px; font-weight: 900; }
+.jira-lane h3 small { color: rgba(43, 45, 66, .7); font-weight: 800; }
+.jira-lane-cols { display: flex; gap: 12px; overflow-x: auto; }
+.jira-lane .column { max-height: 360px; }
+
+/* The ticket window's status and assignee controls. */
+.jira-controls { background: #fff; border: 2px solid var(--ink); border-radius: 14px; box-shadow: 0 3px 0 var(--ink); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.jira-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.jira-row > b { min-width: 72px; font-weight: 900; }
+.jira-found { display: flex; flex-wrap: wrap; gap: 6px; }
+.jira-found:empty { display: none; }
+.jira-found .btn { display: inline-flex; align-items: center; gap: 5px; }
+.jira-found small { color: var(--muted); font-weight: 700; }
+.jira-signin { margin: 0; flex: 1; color: var(--muted); font-weight: 700; }
+.jira-controls .gh-merge-result:not(.error) { background: #d8f5e3; }
+
+/* ⚙️ Settings: the board's link and the office's token. */
+.jira-fields { flex-wrap: wrap; margin-top: 8px; }
+.jira-fields input { flex: 1 1 180px; min-width: 0; font: inherit; font-size: 14px; border: 3px solid var(--ink); border-radius: 12px; padding: 8px 10px; background: #fff; outline: none; }
+.jira-fields input:focus { border-color: var(--accent); }
+
+@media (max-width: 640px) {
+  .jira-tools { margin-left: 0; width: 100%; }
+  .modal input.jira-search { flex: 1; width: auto; }
+}

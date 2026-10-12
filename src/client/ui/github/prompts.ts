@@ -3,6 +3,7 @@ import { store } from '../../state';
 import { repoUrlOf } from '../markdown';
 import type { MeetingPreset } from '../meeting';
 import { officePrompt } from '../prompts';
+import { jiraIssue, ticketContext, ticketPrompt } from '../jira/prompts';
 
 // ---- Prompts for workers ------------------------------------------------------------------------
 
@@ -23,6 +24,9 @@ export interface BoardActions {
 
 /** The task a worker gets for an issue, from the board, a carried card or the queue (the 'issue.work' prompt). */
 export function issuePrompt(it: Pick<GhIssue, 'number' | 'title'> & { url?: string }): string {
+  // A ticket on the Jira board gets the Jira prompt, with what the ticket says.
+  const ticket = jiraIssue(it.number);
+  if (ticket) return ticketPrompt(ticket);
   return officePrompt('issue.work', issueVars(it));
 }
 
@@ -68,5 +72,6 @@ export function pullContext(it: GhPull) {
 }
 
 export function issueContext(it: GhIssue) {
+  if (it.jira) return ticketContext(it);
   return officePrompt('issue.ask', issueVars(it));
 }
