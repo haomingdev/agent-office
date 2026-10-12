@@ -1,6 +1,8 @@
 import './prompt.css';
 import type { AgentEffort, AgentProvider, LostBranch, ServerMsg, WorktreeCleanup, WorktreeState } from '../../shared/protocol';
+import { forgeWords } from '../../shared/floors';
 import { h, openModal } from './dom';
+import { words } from './forge';
 import { store } from '../state';
 import { providerPicker, type ProviderPicker } from './provider';
 import { dictateField } from './dictate';
@@ -42,7 +44,7 @@ export function worktreePref(): boolean {
 export function repoPicker(options: { id: string; name: string }[] | undefined, wtBox: HTMLInputElement): { element: HTMLElement | null; value(): string[] } {
   const picks = (options ?? []).map((r) => {
     const box = h('input', { type: 'checkbox', value: r.id, onchange: () => box.checked && (wtBox.checked = true) }) as HTMLInputElement;
-    return { id: r.id, box, el: h('label.repo-pick', { title: `A worktree of ${r.name} too, on the same branch, with a pull request of its own` }, box, r.name) };
+    return { id: r.id, box, el: h('label.repo-pick', { title: `A worktree of ${r.name} too, on the same branch, with a ${forgeWords(store.floors.find((f) => f.id === r.id)?.forge).pullRequest} of its own` }, box, r.name) };
   });
   if (!picks.length) return { element: null, value: () => [] };
   wtBox.addEventListener('change', () => {
@@ -176,15 +178,16 @@ const CLEANUP_LABEL: Record<WorktreeCleanup, string> = {
 export function sendHomeDialog(opts: SendHomeOptions) {
   const { branch, path } = opts.worktree;
   const across = opts.repos && opts.repos.length > 1 ? opts.repos : undefined;
+  const { pullRequest } = words();
   const choices: [WorktreeCleanup, string, string][] = across
     ? [
         ['all', 'Delete the worktrees and their branch', `Removes its worktrees of ${across.join(', ')}, and ${branch} in each.`],
-        ['worktree', 'Delete the worktrees, keep the branch', `${branch} stays in each for a pull request or a later checkout.`],
+        ['worktree', 'Delete the worktrees, keep the branch', `${branch} stays in each for a ${pullRequest} or a later checkout.`],
         ['keep', 'Keep them all', 'Leaves everything as it is; agent-office prune in each project tidies up later.'],
       ]
     : [
         ['all', 'Delete the worktree and its branch', `Removes ${path} and ${branch}.`],
-        ['worktree', 'Delete the worktree, keep the branch', `${branch} stays for a pull request or a later checkout.`],
+        ['worktree', 'Delete the worktree, keep the branch', `${branch} stays for a ${pullRequest} or a later checkout.`],
         ['keep', 'Keep both', 'Leaves everything as it is; agent-office prune tidies up later.'],
       ];
   const radios = new Map<WorktreeCleanup, HTMLInputElement>();

@@ -21,6 +21,7 @@ import { waitingOnSomeone } from '../../notify';
 import { renderTitle } from '../../shared/title';
 import { store } from '../../state';
 import { $ } from '../../ui/dom';
+import { prName } from '../../ui/forge';
 import { openExpand } from '../../ui/floorplan';
 import { renderWorkers } from '../../ui/workers-panel';
 import { renderLimits } from '../../ui/limits';
@@ -53,6 +54,12 @@ const HOLD_NEAR = 4;
 const HOLD_LEAVE = 5;
 /** How long a worker sent out from the herald has to turn up before its seat's forgotten. */
 const HERALD_WAIT = 30_000;
+
+/** A worker's pull request for its bubble, and what this floor calls it (PR #12, MR !12). */
+function prOf(w: WorkerInfo) {
+  const pr = workerPr(w, store.pulls.items, store.queue.tasks);
+  return [pr, pr && prName(pr.number)] as const;
+}
 
 export type WorkerViewsParts = Pick<Parts, 'stage' | 'worlds' | 'travel' | 'rooftop' | 'cabinet' | 'notifier' | 'waiting' | 'dog' | 'peers'>;
 
@@ -161,7 +168,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
         noOutline(v.model.root);
       }
       v.model.setAction(w.action);
-      v.model.setPr(workerPr(w, store.pulls.items, store.queue.tasks));
+      v.model.setPr(...prOf(w));
       v.model.setLost(!!w.lost);
       const engineBadge = w.kind === 'agent' ? modelBadge(w.provider, w.model, w.effort, w.usage?.model) : undefined;
       v.model.setTask(meetingCard(w) ?? (w.task && w.kind === 'agent' ? { ...w.task, name: `${providerLabel(w.provider, store.project)}${engineBadge ? ` · ${engineBadge}` : ''} · ${w.task.name}` } : w.task));
@@ -364,7 +371,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
   const paintPrs = () => {
     for (const [id, v] of workerViews) {
       const w = store.workers.get(id);
-      if (w) v.model.setPr(workerPr(w, store.pulls.items, store.queue.tasks));
+      if (w) v.model.setPr(...prOf(w));
     }
   };
   store.on('pulls', paintPrs);

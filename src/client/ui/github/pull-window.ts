@@ -3,6 +3,7 @@ import type { GhPull, GhPullDetail, GhReviewComment } from '../../../shared/prot
 import type { Net } from '../../net';
 import { store, workerForPull } from '../../state';
 import { h, openModal, type Modal } from '../dom';
+import { prName, words } from '../forge';
 import { officePrompt } from '../prompts';
 import { getJson, getText } from './api';
 import { openClose } from './close';
@@ -20,6 +21,8 @@ import { buildTree, looksGenerated, parseDiff, renderFileDiff, renderThread, rep
 
 export function openPull(first: GhPull, net: Net, actions: BoardActions) {
   let it = first;
+  const fw = words();
+  const name = () => prName(it.number);
   const itemUrl = it.url;
   const reviewed = new Reviewed(it.url);
   let detail: GhPullDetail | null = null;
@@ -38,7 +41,7 @@ export function openPull(first: GhPull, net: Net, actions: BoardActions) {
   // --- Frame
   const pill = h('span.pill');
   const title = h('h2');
-  const reload = h('button.btn', { type: 'button', title: 'Reload from GitHub' }, '🔄');
+  const reload = h('button.btn', { type: 'button', title: `Reload from ${fw.site}` }, '🔄');
   const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
   const meta = h('div.gh-meta');
   const tabConv = h('button.gh-tab', { type: 'button', role: 'tab' });
@@ -58,25 +61,25 @@ export function openPull(first: GhPull, net: Net, actions: BoardActions) {
   const footBtns = h('span.gh-foot');
   const el = h(
     'div.modal.gh-window',
-    { role: 'dialog', 'aria-label': `Pull request #${it.number}`, tabindex: -1 },
+    { role: 'dialog', 'aria-label': `${fw.pullRequest[0].toUpperCase()}${fw.pullRequest.slice(1)} ${fw.ref}${it.number}`, tabindex: -1 },
     h('header', {}, pill, title, reload, close),
     meta,
     h('nav.gh-tabs', { role: 'tablist' }, tabConv, tabFiles),
     h('div.gh-body', {}, conv, filesPane),
-    h('footer', {}, h('a.grow', { href: it.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open on GitHub ↗'), footBtns),
+    h('footer', {}, h('a.grow', { href: it.url, target: '_blank', rel: 'noopener noreferrer' }, `Open on ${fw.site} ↗`), footBtns),
   );
 
   const handToWorker = () => {
     const p = mergePref(detail?.repo.methods ?? ['squash', 'merge', 'rebase']);
-    if (detail && conflicted(detail)) actions.assign(fixConflictsPrompt(it, p.method, p.deleteBranch), `Fix conflicts & merge PR #${it.number}`);
-    else actions.assign(fixAndMergePrompt(it, p.method, p.deleteBranch), `Fix up & merge PR #${it.number}`);
+    if (detail && conflicted(detail)) actions.assign(fixConflictsPrompt(it, p.method, p.deleteBranch), `Fix conflicts & merge ${name()}`);
+    else actions.assign(fixAndMergePrompt(it, p.method, p.deleteBranch), `Fix up & merge ${name()}`);
   };
 
   const renderFrame = () => {
     const [word, cls] = stateOf(it);
     pill.className = `pill ${cls}`;
     pill.textContent = word;
-    title.textContent = `#${it.number} ${it.title}`;
+    title.textContent = `${fw.ref}${it.number} ${it.title}`;
     title.title = it.title;
     const commits = detail ? `${detail.commits} commit${detail.commits === 1 ? '' : 's'}` : 'its commits';
     meta.replaceChildren(
@@ -105,23 +108,23 @@ export function openPull(first: GhPull, net: Net, actions: BoardActions) {
 
     const isOpen = it.state === 'OPEN';
     const conflicts = !!detail && conflicted(detail);
-    const merge = h(conflicts ? 'button.btn' : 'button.btn.primary', { type: 'button', disabled: !detail, title: detail ? 'Merge this pull request' : 'Loading…' }, '🔀 Merge…');
+    const merge = h(conflicts ? 'button.btn' : 'button.btn.primary', { type: 'button', disabled: !detail, title: detail ? `Merge this ${fw.pullRequest}` : 'Loading…' }, '🔀 Merge…');
     merge.addEventListener('click', () => detail && openMerge(it, detail, net, handToWorker, loadAll));
     const w = workerForPull(store.workers.values(), it);
     footBtns.replaceChildren(
       ...nodes(
       w ? h('button.btn', { type: 'button', onclick: () => actions.goToDesk(w.deskId) }, `🪑 Go to ${w.name}'s desk`) : null,
-      h('button.btn', { type: 'button', title: 'Send a worker your own prompt about this PR', onclick: () => actions.ask(pullContext(it), `Ask about PR #${it.number}`) }, '✍️ Ask a worker…'),
-      isOpen ? h('button.btn', { type: 'button', onclick: () => actions.assign(reviewPrompt(it), `Review PR #${it.number}`) }, '🔍 Review') : null,
+      h('button.btn', { type: 'button', title: `Send a worker your own prompt about this ${fw.pr}`, onclick: () => actions.ask(pullContext(it), `Ask about ${name()}`) }, '✍️ Ask a worker…'),
+      isOpen ? h('button.btn', { type: 'button', onclick: () => actions.assign(reviewPrompt(it), `Review ${name()}`) }, '🔍 Review') : null,
       isOpen
-        ? h('button.btn', { type: 'button', title: 'A few workers review it in the meeting room, each through its own lens, and the office posts one combined review', onclick: () => actions.meeting({ pattern: 'review', pr: it.number, title: `Review of PR #${it.number}`, prompt: officePrompt('pull.panel', pullVars(it)) }) }, '🤝 Review panel…')
+        ? h('button.btn', { type: 'button', title: 'A few workers review it in the meeting room, each through its own lens, and the office posts one combined review', onclick: () => actions.meeting({ pattern: 'review', pr: it.number, title: `Review of ${name()}`, prompt: officePrompt('pull.panel', pullVars(it)) }) }, '🤝 Review panel…')
         : null,
       conflicts
         ? h('button.btn.primary', { type: 'button', title: 'A new worker merges the base in, resolves the conflicts, gets the checks green, then merges', onclick: handToWorker }, '✨ Fix conflicts & merge')
         : isOpen
           ? h('button.btn', { type: 'button', title: 'A worker addresses the review comments, gets the checks green, then merges', onclick: handToWorker }, '🤖 Fix comments & merge')
           : null,
-      isOpen ? h('button.btn', { type: 'button', title: 'Close this pull request without merging it', onclick: () => openClose('pull', it, net, loadAll) }, '🚫 Close PR…') : null,
+      isOpen ? h('button.btn', { type: 'button', title: `Close this ${fw.pullRequest} without merging it`, onclick: () => openClose('pull', it, net, loadAll) }, `🚫 Close ${fw.pr}…`) : null,
       isOpen ? merge : null,
       ),
     );
@@ -508,7 +511,7 @@ export function openPull(first: GhPull, net: Net, actions: BoardActions) {
     renderFrame();
   });
   const modal: Modal = openModal(el, {
-    doing: `🔀 reading PR #${it.number}`,
+    doing: `🔀 reading ${name()}`,
     onClose: () => {
       unsub();
       comment.dispose();

@@ -2,6 +2,7 @@ import type { GhCloseReason, GhIssue, GhPull } from '../../../shared/protocol';
 import type { Net } from '../../net';
 import { store, workerForPull } from '../../state';
 import { h, openModal } from '../dom';
+import { words } from '../forge';
 import { closeWaiters } from './api';
 
 // ---- Close dialog -------------------------------------------------------------------------------
@@ -14,30 +15,32 @@ export function openClose(kind: 'issue' | 'pull', it: GhIssue | GhPull, net: Net
   const pull = kind === 'pull' ? (it as GhPull) : null;
   let reason: GhCloseReason = 'completed';
   let busy = false;
+  const fw = words();
 
   const go = h('button.btn.danger', { type: 'button' });
   const reasons = h('div.seg');
   const renderReasons = () => {
     reasons.replaceChildren(...(Object.keys(REASON_LABEL) as GhCloseReason[]).map((r) => h('button.btn', { type: 'button', class: r === reason ? 'on' : '', onclick: () => ((reason = r), renderReasons()) }, REASON_LABEL[r])));
-    go.textContent = pull ? '🚫 Close pull request' : `${reason === 'completed' ? '✔️' : '🚫'} Close as ${reason}`;
+    go.textContent = pull ? `🚫 Close ${fw.pullRequest}` : `${reason === 'completed' ? '✔️' : '🚫'} Close as ${reason}`;
   };
   const comment = h('textarea', { rows: 4, placeholder: 'Leave a comment (optional)', 'aria-label': 'Closing comment' }) as HTMLTextAreaElement;
   const del = h('input', { type: 'checkbox', id: 'close-del' }) as HTMLInputElement;
   const w = pull && workerForPull(store.workers.values(), pull);
   const result = h('div.gh-merge-result.hidden');
   const cancel = h('button.btn', { type: 'button' }, 'Cancel');
-  const noun = pull ? 'pull request' : 'issue';
+  const noun = pull ? fw.pullRequest : 'issue';
+  const ref = pull ? fw.ref : '#';
 
   const el = h(
     'div.modal.gh-merge',
-    { role: 'dialog', 'aria-label': `Close ${noun} #${it.number}` },
-    h('header', {}, h('h2', {}, `${pull ? '🚫' : '✔️'} Close ${pull ? 'PR' : 'issue'} #${it.number}`)),
+    { role: 'dialog', 'aria-label': `Close ${noun} ${ref}${it.number}` },
+    h('header', {}, h('h2', {}, `${pull ? '🚫' : '✔️'} Close ${pull ? fw.pr : 'issue'} ${ref}${it.number}`)),
     h(
       'div.body',
       {},
       h('p.gh-merge-title', {}, it.title, pull ? h('small', {}, `${pull.headRefName} → ${pull.baseRefName}`) : null),
       pull
-        ? h('div.gh-status.muted', {}, h('span', {}, 'ℹ️'), `It won't be merged, and can be reopened on GitHub later.${w ? ` ${w.name} is still at a desk working on its branch.` : ''}`)
+        ? h('div.gh-status.muted', {}, h('span', {}, 'ℹ️'), `It won't be merged, and can be reopened on ${fw.site} later.${w ? ` ${w.name} is still at a desk working on its branch.` : ''}`)
         : h('label', {}, 'Why'),
       pull ? h('label.gh-check', { for: 'close-del' }, del, `Delete ${pull.headRefName} too`) : reasons,
       comment,

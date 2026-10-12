@@ -1,7 +1,8 @@
 import type http from 'node:http';
 import { notLeaving } from '../leave-on-merge.js';
 import { findWorker, readHireRequest, readHomeRequest, readPrRequest, workerRow, type PullsView } from '../office-workers.js';
-import { gh } from '../github.js';
+import { pullRequests } from '../forge.js';
+import { forgeWords } from '../../shared/floors.js';
 import type { Floor } from '../floor.js';
 import { nextFreeSeat } from '../../shared/layout.js';
 import type { WorkerInfo } from '../../shared/protocol.js';
@@ -14,20 +15,21 @@ import { readBody, send } from '../http/util.js';
  * on the floor's list. A string says why it can't be.
  */
 async function pullOf(floor: Floor, n: number, repo?: string): Promise<{ number: number; url: string } | string> {
-  const here = floor.def.repo;
-  if (repo && here && repo.toLowerCase() !== here.toLowerCase()) return `That pull request is in ${repo}, and this floor is ${here}`;
-  const listed = floor.github.pulls.items.find((p) => p.number === n);
+  const here = floor.repo;
+  const w = forgeWords(floor.forge.kind);
+  if (repo && here && repo.toLowerCase() !== here.toLowerCase()) return `That ${w.pullRequest} is in ${repo}, and this floor is ${here}`;
+  const listed = floor.forge.pulls.items.find((p) => p.number === n);
   let pr: { url: string; state: string } | undefined = listed;
   if (!pr) {
     try {
-      pr = JSON.parse(await gh(['pr', 'view', String(n), '--json', 'url,state'], floor.dir)) as { url: string; state: string };
+      pr = await pullRequests(here).view(n, floor.dir);
     } catch (err) {
-      return `No pull request #${n} here: ${(err as Error).message}`;
+      return `No ${w.pullRequest} ${w.ref}${n} here: ${(err as Error).message}`;
     }
   }
-  if (pr.state === 'CLOSED') return `PR #${n} was closed without merging`;
+  if (pr.state === 'CLOSED') return `${w.pr} ${w.ref}${n} was closed without merging`;
   // The office follows the open ones and the last ones merged: an older one would look open for good.
-  if (!listed && pr.state === 'MERGED') return `PR #${n} merged too long ago for the office to follow: send the worker home by name instead`;
+  if (!listed && pr.state === 'MERGED') return `${w.pr} ${w.ref}${n} merged too long ago for the office to follow: send the worker home by name instead`;
   return { number: n, url: pr.url };
 }
 
@@ -45,7 +47,7 @@ export async function officeWorkers(ctx: Ctx, req: http.IncomingMessage, res: ht
   const me = floor?.workers.authenticate(workerId, token);
   if (!floor || !me) return send(res, 401, { error: 'Send your own AGENT_OFFICE_WORKER_ID as ?worker= and AGENT_OFFICE_HOOK_TOKEN as the bearer token' });
   const who = me.name;
-  const view: PullsView = { pulls: floor.github.pulls.items, tasks: floor.queue.state().tasks, pullsOf: (id) => ctx.floors.get(id)?.github.pulls.items };
+  const view: PullsView = { pulls: floor.forge.pulls.items, tasks: floor.queue.state().tasks, pullsOf: (id) => ctx.floors.get(id)?.forge.pulls.items };
   const row = (id: string) => {
     const w = floor.workers.get(id);
     return w && workerRow(w, view, me.id);
@@ -160,9 +162,10 @@ export async function officeWorkers(ctx: Ctx, req: http.IncomingMessage, res: ht
   if (ask.issue) {
     const n = ask.issue;
     floor.queue.dropIssue(n);
-    const as = owner ? ctx.signins.ghAs(owner) : undefined;
-    if (typeof as === 'string') ctx.toastFloor(floor, `Couldn't assign issue #${n} on GitHub: ${as}`, 'warn');
-    else void floor.github.claim(n, as).then((e) => e && ctx.toastFloor(floor, `Couldn't assign issue #${n} on GitHub: ${e}`, 'warn'));
+    const as = owner ? ctx.signins.ghAs(owner, floor.forge.kind) : undefined;
+    const site = forgeWords(floor.forge.kind).site;
+    if (typeof as === 'string') ctx.toastFloor(floor, `Couldn't assign issue #${n} on ${site}: ${as}`, 'warn');
+    else void floor.forge.claim(n, as).then((e) => e && ctx.toastFloor(floor, `Couldn't assign issue #${n} on ${site}: ${e}`, 'warn'));
   }
   send(res, 200, { ok: true, worker: row(r.id) });
 }

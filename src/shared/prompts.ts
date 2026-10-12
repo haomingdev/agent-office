@@ -5,6 +5,10 @@
 // A {{name}} in one is filled in by the office when it's sent.
 
 import { STATION_AGENT, type StationKind } from './layout.js';
+import type { ForgeKind } from './floors.js';
+import { GITLAB_JOB, GITLAB_PROMPTS, gitlabQueueApi } from './prompts-gitlab.js';
+
+export { meetingRefs } from './prompts-gitlab.js';
 
 export type PromptGroup = 'issues' | 'pulls' | 'queue' | 'repos' | 'stations' | 'meetings' | 'office';
 
@@ -57,14 +61,15 @@ const QUEUE_API = `The task queue gives each task a fresh worker in its own git 
   EOF
 - Take a waiting task off: office-queue remove <id>`;
 
-/** What a board agent is told ahead of the first request typed to it. */
-function stationDefault(kind: StationKind): string {
+/** What a board agent is told ahead of the first request typed to it (on a GitLab floor, about GitLab and glab). */
+function stationDefault(kind: StationKind, forge?: ForgeKind): string {
   const queue = kind === 'queue';
+  const lab = forge === 'gitlab';
   return [
     `You're the ${STATION_AGENT[kind].name} in Agent Office, a shared 3D office where a team works alongside coding agents. You stand at a kiosk by ${BOARD[kind]}, and whoever walks up types you a request. The first one is at the end of this message.`,
-    JOB[kind],
+    lab ? GITLAB_JOB[kind] : JOB[kind],
     `You're in the project's main checkout, which other people and workers use too: don't switch branches, commit, or leave edits in it. Work that needs code changed goes on the task queue, ${queue ? 'always' : 'unless the person asks you for something else'}.`,
-    QUEUE_API,
+    lab ? gitlabQueueApi(QUEUE_API) : QUEUE_API,
     `${queue ? "When you've queued it, say in a few lines what you queued: each task's id and title." : "When you've done what was asked, say in a few lines what you did, with links."} Then wait: the next request may come from someone else.`,
     `The request:`,
   ].join('\n\n');
@@ -419,7 +424,13 @@ export function placeholders(template: string): string[] {
   return [...new Set([...template.matchAll(PLACEHOLDER)].map((m) => m[1]))];
 }
 
-/** A prompt's text as the office has it now: rewritten in ⚙️ Settings, or the default. */
-export function promptText(custom: Partial<Record<PromptId, { text: string }>> | undefined, id: PromptId): string {
-  return custom?.[id]?.text ?? PROMPTS[id].text;
+/**
+ * A prompt's text as the office has it now: rewritten in ⚙️ Settings, or the default, which on a
+ * GitLab floor speaks of merge requests and glab (prompts-gitlab.ts).
+ */
+export function promptText(custom: Partial<Record<PromptId, { text: string }>> | undefined, id: PromptId, forge?: ForgeKind): string {
+  const own = custom?.[id]?.text;
+  if (own !== undefined || forge !== 'gitlab') return own ?? PROMPTS[id].text;
+  const station = /^station\.(issues|pulls|queue)$/.exec(id)?.[1] as StationKind | undefined;
+  return station ? stationDefault(station, 'gitlab') : (GITLAB_PROMPTS[id] ?? PROMPTS[id].text);
 }

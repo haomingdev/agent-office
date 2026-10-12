@@ -21,6 +21,7 @@ import { store } from '../../state';
 import { openAsk } from '../../ui/ask';
 import { STATUS_LABEL, clip, closeAllModals, h, toast } from '../../ui/dom';
 import { openDeskLabel } from '../../ui/floorplan';
+import { prName, words } from '../../ui/forge';
 import type { MeetingPreset } from '../../ui/meeting';
 import { confirmDialog, lostWorktreeDialog, openPrompt, routeWorktreeMessage, sendHomeDialog } from '../../ui/prompt';
 import { providerLabel, resolvedProvider } from '../../ui/provider';
@@ -250,11 +251,11 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
       else window.open(w.pr.url, '_blank', 'noopener');
       return;
     }
-    if (!w.worktree) return toast(`${w.name} works in the main checkout — only workers with their own worktree can open a PR`, 'warn');
+    if (!w.worktree) return toast(`${w.name} works in the main checkout — only workers with their own worktree can open a ${words().pr}`, 'warn');
     if (w.lost) return fixLostWorktree(w);
     if (w.prOpening) return;
     if (!prReady(w)) return toast(`${w.name} is still ${STATUS_LABEL[w.status]} — wait until it's done`, 'warn');
-    toast(`Pushing ${w.worktree.branch} and opening a pull request…`);
+    toast(`Pushing ${w.worktree.branch} and opening a ${words().pullRequest}…`);
     net.send({ t: 'worker.pr', workerId: w.id });
   }
 
@@ -269,7 +270,7 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
       if (!now || now.prOpening) return;
       if (now.lost) return fixLostWorktree(now);
       if (!prReady(now)) return toast(`${now.name} is still ${STATUS_LABEL[now.status]} — wait until it's done`, 'warn');
-      toast(`Pushing ${now.worktree?.branch ?? 'its branch'} in each of ${now.name}'s repositories and opening pull requests…`);
+      toast(`Pushing ${now.worktree?.branch ?? 'its branch'} in each of ${now.name}'s repositories and opening ${words().pullRequest}s…`);
       net.send({ t: 'worker.pr', workerId: now.id });
     };
     if (!workerRepos(w).some((r) => r.pr)) return open();
@@ -394,7 +395,7 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
         key('E', 'Open terminal'),
         key('C', 'Changes'),
         isAsleep(w.status) ? key('R', shell ? 'Restart' : 'Resume') : key('P', shell ? 'Run command' : 'Prompt'),
-        w.repos?.length ? reposKey(w) : w.pr ? key('O', `PR #${w.pr.number}`) : w.prOpening ? aside('⏳ Opening PR…') : prReady(w) ? key('O', 'Open PR') : '',
+        w.repos?.length ? reposKey(w) : w.pr ? key('O', prName(w.pr.number)) : w.prOpening ? aside(`⏳ Opening ${words().pr}…`) : prReady(w) ? key('O', `Open ${words().pr}`) : '',
         key('X', 'Send home'),
         labelKey,
       ],
@@ -405,9 +406,10 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
   function reposKey(w: WorkerInfo) {
     const repos = workerRepos(w);
     const prs = repos.filter((r) => r.pr).length;
-    if (w.prOpening) return aside('⏳ Opening PRs…');
-    if (prs) return key('O', `${prs} of ${repos.length} PRs`);
-    return prReady(w) ? key('O', `Open PRs (${repos.length} repos)`) : '';
+    const { pr } = words();
+    if (w.prOpening) return aside(`⏳ Opening ${pr}s…`);
+    if (prs) return key('O', `${prs} of ${repos.length} ${pr}s`);
+    return prReady(w) ? key('O', `Open ${pr}s (${repos.length} repos)`) : '';
   }
 
   function stationHint(deskId: string): Hint {

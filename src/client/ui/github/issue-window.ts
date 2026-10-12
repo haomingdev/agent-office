@@ -3,6 +3,7 @@ import type { GhIssue, GhIssueDetail } from '../../../shared/protocol';
 import type { Net } from '../../net';
 import { store } from '../../state';
 import { h, openModal, timeAgo } from '../dom';
+import { words } from '../forge';
 import { issueMeeting } from '../meeting';
 import { providerPicker } from '../provider';
 import { getJson } from './api';
@@ -31,7 +32,7 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
   conv.append(h('div.gh-col', {}, thread, comment.el));
   // The footer stays put and renderFrame only shows, hides and relabels, so a board refresh never
   // pulls focus out of the provider picker.
-  const closeIssue = h('button.btn', { type: 'button', title: 'Close this issue on GitHub', onclick: () => openClose('issue', it, net, load) }, '✔️ Close issue…');
+  const closeIssue = h('button.btn', { type: 'button', title: `Close this issue on ${words().site}`, onclick: () => openClose('issue', it, net, load) }, '✔️ Close issue…');
   const queueProvider = providerPicker(store.project, `issue-provider-${it.number}`, 'Queue on');
   const addIssueToQueue = () => {
     if (!queueProvider.valid()) return;
@@ -51,7 +52,7 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
     h(
       'footer',
       {},
-      h('a.grow', { href: it.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open on GitHub ↗'),
+      h('a.grow', { href: it.url, target: '_blank', rel: 'noopener noreferrer' }, `Open on ${words().site} ↗`),
       h('button.btn', { type: 'button', title: 'Send a worker your own prompt about this issue', onclick: () => actions.ask(issueContext(it), `Ask about issue #${it.number}`) }, '✍️ Ask a worker…'),
       h('button.btn', { type: 'button', title: 'Workers take it on together in the meeting room: a debate, lead & team, map-reduce or red / blue', onclick: () => actions.meeting(issueMeeting(it.number, it.title)) }, '🤝 Meeting…'),
       closeIssue,

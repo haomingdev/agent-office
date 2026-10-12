@@ -36,17 +36,20 @@ const LOST_CHIP: [string, string, string] = ['🌿 WORKTREE DELETED', '#ffb703',
 const PR_INK: Record<WorkerPr['state'], string> = { open: '#2da44e', merged: '#9d4edd' };
 const PR_ICON: Record<WorkerPr['state'], string> = { open: '🔀', merged: '🎉' };
 
+/** A worker's pull request and what its floor calls it ("PR #12", "MR !12"; PR #12 when not given). */
+export type NamedPr = WorkerPr & { name?: string };
+
 /**
  * The bubble (or the task card) over a worker's head, and a key that changes whenever it would look
  * different: `draw` makes it, or null for none.
  */
-export function bubbleFor(status: WorkerStatus, bounce: boolean, task: WorkerTask | undefined, pr: WorkerPr | undefined, lost: boolean): { key: string; draw(): THREE.Sprite | null } {
+export function bubbleFor(status: WorkerStatus, bounce: boolean, task: WorkerTask | undefined, pr: NamedPr | undefined, lost: boolean): { key: string; draw(): THREE.Sprite | null } {
   const hot = status === 'needs_input' || (status === 'done' && bounce);
   const asking = status === 'needs_input' && !lost;
   const bg = hot ? (status === 'done' ? '#caffbf' : NEEDS_YOU.card) : status === 'working' ? '#ffec99' : '#fffaf3';
   const border = pr ? PR_INK[pr.state] : asking ? NEEDS_YOU.bg : undefined;
   // Not working on or waiting for something more: its pull request in place of ready / done / asleep.
-  const prLabel = pr && status !== 'working' && status !== 'needs_input' && status !== 'starting' ? `${PR_ICON[pr.state]} PR #${pr.number} ${pr.state}` : undefined;
+  const prLabel = pr && status !== 'working' && status !== 'needs_input' && status !== 'starting' ? `${PR_ICON[pr.state]} ${pr.name ?? `PR #${pr.number}`} ${pr.state}` : undefined;
   const bubble = lost
     ? '🌿 worktree deleted'
     : prLabel ?? (status === 'needs_input' ? NEEDS_YOU.text : status === 'done' && bounce ? '✅ done!' : status === 'working' ? '⌨️ working' : isAsleep(status) ? '💤' : '');

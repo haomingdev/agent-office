@@ -2,6 +2,7 @@ import { WebSocket } from 'ws';
 import type { GhAs } from '../signins.js';
 import type { Floor } from '../floor.js';
 import type { SignInKind } from '../../shared/protocol.js';
+import { forgeWords, type ForgeKind } from '../../shared/floors.js';
 import type { Ctx, Gates } from './context.js';
 import type { Client } from './client.js';
 
@@ -14,9 +15,11 @@ export function gates(ctx: Ctx): Gates {
    */
   const takeIssue = (c: Client, floor: Floor, n: number) => {
     floor.queue.dropIssue(n);
-    const as = c.accountId ? ctx.signins.ghAs(c.accountId) : undefined;
-    if (typeof as === 'string') return ctx.warn(c, `Couldn't assign issue #${n} on GitHub: ${as}`);
-    void floor.github.claim(n, as).then((err) => ctx.warn(c, err && `Couldn't assign issue #${n} on GitHub: ${err}`));
+    const kind = floor.forge.kind;
+    const as = c.accountId ? ctx.signins.ghAs(c.accountId, kind) : undefined;
+    const site = forgeWords(kind).site;
+    if (typeof as === 'string') return ctx.warn(c, `Couldn't assign issue #${n} on ${site}: ${as}`);
+    void floor.forge.claim(n, as).then((err) => ctx.warn(c, err && `Couldn't assign issue #${n} on ${site}: ${err}`));
   };
 
   /**
@@ -27,7 +30,7 @@ export function gates(ctx: Ctx): Gates {
   const withSignIn = (c: Client, which: SignInKind | undefined, go: () => void, refused?: (why: string) => void) => {
     const { signins } = ctx;
     const id = c.accountId;
-    const ready = (a: string) => (which === 'claude' ? signins.claudeReady(a) : signins.githubReady(a));
+    const ready = (a: string) => (which === 'claude' ? signins.claudeReady(a) : signins.githubReady(a, which ?? 'github'));
     if (!which || !id || ready(id)) return go();
     void signins.look(id, true).then(() => {
       if (c.out || c.ws.readyState !== WebSocket.OPEN) return;
@@ -52,13 +55,13 @@ export function gates(ctx: Ctx): Gates {
       go();
     });
   };
-  /** Runs `go` with how the office acts on GitHub for `c`: as them, or as itself (no account, or an admin's choice). */
-  const withGitHub = (c: Client, go: (as: GhAs | undefined) => void, refused?: (why: string) => void) =>
+  /** Runs `go` with how the office acts on GitHub (or a GitLab) for `c`: as them, or as itself (no account, or an admin's choice). */
+  const withForge = (c: Client, forge: ForgeKind, go: (as: GhAs | undefined) => void, refused?: (why: string) => void) =>
     withSignIn(
       c,
-      'github',
+      forge,
       () => {
-        const as = c.accountId ? ctx.signins.ghAs(c.accountId) : undefined;
+        const as = c.accountId ? ctx.signins.ghAs(c.accountId, forge) : undefined;
         if (typeof as !== 'string') return go(as);
         if (refused) refused(as);
         else ctx.warn(c, as);
@@ -68,5 +71,5 @@ export function gates(ctx: Ctx): Gates {
   /** Needs a Claude sign-in of its own when the worker it starts runs Claude. */
   const claudeFor = (provider: string | undefined): SignInKind | undefined => (provider === 'claude' ? 'claude' : undefined);
 
-  return { takeIssue, withSignIn, withFreshBase, withGitHub, claudeFor };
+  return { takeIssue, withSignIn, withFreshBase, withForge, claudeFor };
 }

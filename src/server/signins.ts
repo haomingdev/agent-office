@@ -1,13 +1,15 @@
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as pty from '@lydell/node-pty';
 import type { SignInKind, SignInState, SignInsState } from '../shared/protocol.js';
+import { lastWords, plain, quote, run, seedClaude } from './signins-run.js';
+import { GITLAB_HOST, GITLAB_TOKEN, asGitLab, glabCredential, glabDir, glabLogin, glabLogout, glabSignedIn, glabWho } from './signins-gitlab.js';
 
 /*
- * Everyone's own Claude and GitHub
- * --------------------------------
+ * Everyone's own Claude, GitHub and GitLab
+ * -----------------------------------------
  * In an office with accounts, each person's workers run on that person's own Claude plan and
  * GitHub account. Every account gets a folder, .agent-office/homes/<id>/, holding its own Claude
  * config (CLAUDE_CONFIG_DIR), gh config (GH_CONFIG_DIR) and git config (GIT_CONFIG_GLOBAL), and
@@ -32,7 +34,6 @@ const GITHUB_VARS = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_
 const FLOW_MS = 15 * 60_000;
 /** Someone's sign-ins are looked at again at most this often, unless they ask. */
 const LOOK_GAP_MS = 20_000;
-const LOOK_TIMEOUT_MS = 30_000;
 /** From `claude setup-token` (sk-ant-oat01-…), or an Anthropic API key (sk-ant-api03-…). */
 const CLAUDE_TOKEN = /^sk-ant-[a-z]+\d*-[A-Za-z0-9_-]{20,}$/;
 const API_KEY = /^sk-ant-api/;
@@ -45,8 +46,11 @@ interface Saved {
   /** Unset: its own login, in its folder. A token pasted from `claude setup-token` (or an API key). The office machine's own (admins). */
   claude?: { use: 'token'; token: string } | { use: 'office' };
   github?: { use: 'office' };
+  gitlab?: { use: 'office' };
+  /** The GitLab its own GitLab sign-in is for (see signins-gitlab.ts). */
+  gitlabHost?: string;
   /** Who the last look found each signed in as, so workers can start before the next look. */
-  seen?: { claude?: string; github?: string };
+  seen?: { claude?: string; github?: string; gitlab?: string };
 }
 
 /** A sign-in the office is running for someone. */
@@ -59,6 +63,7 @@ interface Flow {
 interface Live {
   claude: Omit<SignInState, 'how'>;
   github: Omit<SignInState, 'how'>;
+  gitlab: Omit<SignInState, 'how'>;
   flows: Partial<Record<SignInKind, Flow>>;
   looking?: Promise<void>;
   lookedAt: number;
@@ -76,9 +81,10 @@ export class SignIns {
 
   constructor(
     dataDir: string,
-    /** The `claude` and `gh` binaries, or null when they aren't installed. */
+    /** The `claude`, `gh` and `glab` binaries, or null when they aren't installed. */
     private claude: string | null,
     private gh: string | null,
+    private glab: string | null,
     /** The office's own environment, which everyone's is built on. */
     private base: () => Record<string, string>,
     /** Whether the account may use the office's own sign-ins (admins). */
@@ -94,6 +100,7 @@ export class SignIns {
     return {
       claude: { ...l.claude, how: this.how(id, s, 'claude') },
       github: { ...l.github, how: this.how(id, s, 'github') },
+      gitlab: { ...l.gitlab, how: this.how(id, s, 'gitlab'), ...(s.gitlabHost ? { host: s.gitlabHost } : {}) },
       office: this.mayUseOffice(id),
     };
   }
@@ -104,16 +111,16 @@ export class SignIns {
     return this.how(id, s, 'claude') !== 'login' || !!s.seen?.claude;
   }
 
-  githubReady(id: string): boolean {
+  githubReady(id: string, which: 'github' | 'gitlab' = 'github'): boolean {
     const s = this.load(id);
-    return this.how(id, s, 'github') === 'office' || !!s.seen?.github;
+    return this.how(id, s, which) === 'office' || !!s.seen?.[which];
   }
 
   /** What to tell someone who needs `which` signed in first. */
   why(which: SignInKind): string {
     return which === 'claude'
       ? `Sign in to Claude first (${HELP_WHERE}): your workers run on your own Claude plan`
-      : `Sign in to GitHub first (${HELP_WHERE}): the office acts on GitHub as you`;
+      : `Sign in to ${which === 'gitlab' ? 'GitLab' : 'GitHub'} first (${HELP_WHERE}): the office acts on ${which === 'gitlab' ? 'GitLab' : 'GitHub'} as you`;
   }
 
   /**
@@ -127,10 +134,10 @@ export class SignIns {
     return `${how}:${s.claude?.use === 'token' ? s.claude.token.slice(-12) : ''}:${s.seen?.claude ?? ''}`;
   }
 
-  /** The GitHub login `id` acts as (for "you" on comments); undefined when it's the office's own or none. */
-  githubLogin(id: string): string | undefined {
+  /** The GitHub (or GitLab) login `id` acts as (for "you" on comments); undefined when it's the office's own or none. */
+  githubLogin(id: string, which: 'github' | 'gitlab' = 'github'): string | undefined {
     const s = this.load(id);
-    return this.how(id, s, 'github') === 'login' ? s.seen?.github?.replace(/^@/, '') : undefined;
+    return this.how(id, s, which) === 'login' ? s.seen?.[which]?.replace(/^@/, '').replace(/ on .*$/, '') : undefined;
   }
 
   /**
@@ -151,14 +158,15 @@ export class SignIns {
       env.GH_CONFIG_DIR = path.join(home, 'gh');
       env.GIT_CONFIG_GLOBAL = path.join(home, 'gitconfig');
     }
+    if (only !== 'claude' && this.how(id, s, 'gitlab') !== 'office') asGitLab(env, home);
     return env;
   }
 
-  /** How the office runs gh for `id`: as them (GhAs), as itself (undefined, an admin's choice), or a reason it can't. */
-  ghAs(id: string): GhAs | undefined | string {
+  /** How the office runs gh (or glab) for `id`: as them (GhAs), as itself (undefined, an admin's choice), or a reason it can't. */
+  ghAs(id: string, which: 'github' | 'gitlab' = 'github'): GhAs | undefined | string {
     const s = this.load(id);
-    if (this.how(id, s, 'github') === 'office') return undefined;
-    if (!s.seen?.github) return this.why('github');
+    if (this.how(id, s, which) === 'office') return undefined;
+    if (!s.seen?.[which]) return this.why(which);
     return { key: id, env: this.apply(id, this.base(), [], 'github') };
   }
 
@@ -167,7 +175,7 @@ export class SignIns {
     const l = this.get(id);
     if (l.looking) return l.looking;
     if (!force && Date.now() - l.lookedAt < LOOK_GAP_MS) return Promise.resolve();
-    l.looking = Promise.all([this.lookClaude(id), this.lookGithub(id)]).then(() => {
+    l.looking = Promise.all([this.lookClaude(id), this.lookGithub(id), this.lookGitlab(id)]).then(() => {
       l.lookedAt = Date.now();
       l.looking = undefined;
       this.onChange(id);
@@ -177,6 +185,7 @@ export class SignIns {
 
   /** Starts signing `id` in from the office. The page to open comes through state(). Returns why it can't. */
   start(id: string, which: SignInKind): string | undefined {
+    if (which === 'gitlab') return 'Paste a personal access token from your GitLab (Preferences → Access tokens, with the api scope)';
     return which === 'claude' ? this.startClaude(id) : this.startGithub(id);
   }
 
@@ -198,10 +207,11 @@ export class SignIns {
     void this.look(id, true);
   }
 
-  /** A pasted token: from `claude setup-token` (or an API key), or a GitHub token. Resolves to why it didn't take. */
-  async token(id: string, which: SignInKind, raw: string): Promise<string | undefined> {
+  /** A pasted token: from `claude setup-token` (or an API key), a GitHub token, or a GitLab one for `host`. Resolves to why it didn't take. */
+  async token(id: string, which: SignInKind, raw: string, host?: string): Promise<string | undefined> {
     const token = raw.trim();
     this.stop(id, which);
+    if (which === 'gitlab') return this.gitlabToken(id, token, (host ?? this.load(id).gitlabHost ?? '').trim().toLowerCase());
     if (which === 'claude') {
       if (!CLAUDE_TOKEN.test(token)) return "That isn't a token from `claude setup-token` (sk-ant-oat01-…) or an Anthropic API key (sk-ant-api03-…)";
       const s = this.load(id);
@@ -209,7 +219,7 @@ export class SignIns {
       this.save(id, s);
       // Claude asks once before it uses an API key from the environment; this one is theirs, so it's approved.
       if (API_KEY.test(token)) {
-        this.seed(path.join(this.prepare(id), 'claude'), (c) => {
+        seedClaude(path.join(this.prepare(id), 'claude'), (c) => {
           c.customApiKeyResponses ??= { approved: [], rejected: [] };
           const tail = token.slice(-20);
           if (!c.customApiKeyResponses.approved.includes(tail)) c.customApiKeyResponses.approved.push(tail);
@@ -247,7 +257,7 @@ export class SignIns {
     delete s[which];
     if (s.seen) delete s.seen[which];
     this.save(id, s);
-    if (which === 'github') this.writeGitConfig(id);
+    if (which !== 'claude') this.writeGitConfig(id);
     await this.look(id, true);
   }
 
@@ -303,6 +313,7 @@ export class SignIns {
       l = {
         claude: seen.claude ? { status: 'ok', who: seen.claude } : { status: 'none' },
         github: seen.github ? { status: 'ok', who: seen.github } : { status: 'none' },
+        gitlab: seen.gitlab ? { status: 'ok', who: seen.gitlab } : { status: 'none' },
         flows: {},
         lookedAt: 0,
       };
@@ -320,8 +331,8 @@ export class SignIns {
   private prepare(id: string): string {
     const home = this.home(id);
     if (!existsSync(path.join(home, 'gitconfig'))) {
-      for (const d of [this.homes, home, path.join(home, 'claude'), path.join(home, 'gh')]) mkdirSync(d, { recursive: true, mode: 0o700 });
-      this.seed(path.join(home, 'claude'));
+      for (const d of [this.homes, home, path.join(home, 'claude'), path.join(home, 'gh'), glabDir(home)]) mkdirSync(d, { recursive: true, mode: 0o700 });
+      seedClaude(path.join(home, 'claude'));
       this.writeGitConfig(id);
     }
     return home;
@@ -540,6 +551,36 @@ export class SignIns {
     this.remember(id, 'github', how === 'office' ? undefined : l.github.who);
   }
 
+  private async gitlabToken(id: string, token: string, host: string): Promise<string | undefined> {
+    if (!this.glab) return "The GitLab CLI (glab) isn't installed on the office's machine";
+    if (!GITLAB_HOST.test(host)) return 'Say which GitLab: its address, like gitlab.example.com';
+    if (!GITLAB_TOKEN.test(token)) return "That doesn't look like a GitLab token (glpat-…)";
+    const s = this.load(id);
+    delete s.gitlab;
+    this.save(id, { ...s, gitlabHost: host });
+    const err = await glabLogin(this.glab, asGitLab(this.base(), this.prepare(id)), host, token);
+    await this.look(id, true);
+    return err && `GitLab didn't take that token: ${err}`;
+  }
+
+  private async lookGitlab(id: string) {
+    const l = this.get(id);
+    const s = this.load(id);
+    const how = this.how(id, s, 'gitlab');
+    // Signed in at a desk's shell, not here: which GitLab, from its own glab.
+    const host = s.gitlabHost ?? (how !== 'office' && this.glab ? await glabSignedIn(this.glab, asGitLab(this.base(), this.prepare(id))) : undefined);
+    if (how === 'office' || !this.glab || !host) {
+      l.gitlab = how === 'office' ? { status: 'ok', who: "the office's own glab" } : { status: 'none', error: this.glab ? undefined : "The GitLab CLI (glab) isn't installed on the office's machine" };
+      return this.remember(id, 'gitlab', undefined);
+    }
+    if (host !== s.gitlabHost) this.save(id, { ...s, gitlabHost: host });
+    const r = await glabWho(this.glab, asGitLab(this.base(), this.prepare(id)), host);
+    l.gitlab = r.who ? { status: 'ok', who: r.who } : { status: 'none', error: r.error };
+    // Commits carry their GitLab name, unless they're signed in to GitHub too, whose name comes first.
+    if (r.who && !s.seen?.github) this.writeGitConfig(id, { name: r.name!, email: r.email ?? '' });
+    this.remember(id, 'gitlab', r.who);
+  }
+
   /** Keeps who the last look found, for the next start of the office. */
   private remember(id: string, which: SignInKind, who: string | undefined) {
     const s = this.load(id);
@@ -552,29 +593,12 @@ export class SignIns {
   private async logout(id: string, which: SignInKind) {
     if (which === 'claude') {
       if (this.claude) await run(this.claude, ['auth', 'logout'], this.claudeEnv(id));
+    } else if (which === 'gitlab') {
+      const host = this.load(id).gitlabHost;
+      if (this.glab && host) await glabLogout(this.glab, asGitLab(this.base(), this.prepare(id)), host);
     } else {
       if (this.gh) await run(this.gh, ['auth', 'logout', '--hostname', 'github.com'], this.githubEnv(id));
       rmSync(path.join(this.home(id), 'gh', 'hosts.yml'), { force: true });
-    }
-  }
-
-  /** Claude's own settings in an account's folder: its first-run questions already answered. */
-  private seed(dir: string, change?: (c: any) => void) {
-    const file = path.join(dir, '.claude.json');
-    let c: any = {};
-    try {
-      c = JSON.parse(readFileSync(file, 'utf8'));
-    } catch {
-      // new
-    }
-    const before = JSON.stringify(c);
-    c.hasCompletedOnboarding = true;
-    change?.(c);
-    if (JSON.stringify(c) === before) return;
-    try {
-      writeFileSync(file, JSON.stringify(c, null, 2), { mode: 0o600 });
-    } catch (err) {
-      console.error(`agent-office: couldn't write ${file}: ${(err as Error).message}`);
     }
   }
 
@@ -589,7 +613,7 @@ export class SignIns {
     }
     const trusted = (d: string) => office?.projects?.[d]?.hasTrustDialogAccepted === true;
     if (!dirs.some(trusted)) return;
-    this.seed(configDir, (c) => {
+    seedClaude(configDir, (c) => {
       c.projects ??= {};
       for (const d of dirs) c.projects[d] = { ...c.projects[d], hasTrustDialogAccepted: true };
     });
@@ -610,7 +634,9 @@ export class SignIns {
         lines.push(`[credential ${quote(host)}]`, '\thelper =', `\thelper = ${quote(`!'${this.gh.replace(/'/g, `'\\''`)}' auth git-credential`)}`);
       }
     }
-    if (user) lines.push('[user]', `\tname = ${quote(user.name)}`, `\temail = ${quote(user.email)}`);
+    const lab = this.load(id).gitlabHost;
+    if (this.glab && lab) lines.push(...glabCredential(this.glab, lab));
+    if (user) lines.push('[user]', `\tname = ${quote(user.name)}`, ...(user.email ? [`\temail = ${quote(user.email)}`] : []));
     const text = `${lines.join('\n')}\n`;
     const file = path.join(home, 'gitconfig');
     try {
@@ -620,41 +646,4 @@ export class SignIns {
       console.error(`agent-office: couldn't write ${file}: ${(err as Error).message}`);
     }
   }
-}
-
-/** A value for a git config file, quoted. */
-function quote(v: string): string {
-  return `"${v.replace(/[\p{C}]/gu, '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-}
-
-/** Terminal output as plain text: no colors, links or cursor moves. */
-function plain(s: string): string {
-  return s
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
-    .replace(/\x1b[@-_]/g, '')
-    .replace(/\r\n?/g, '\n');
-}
-
-/** The last thing a command said, minus the link and the prompt, for an error line. */
-function lastWords(s: string): string {
-  const lines = plain(s)
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l && !/https?:\/\/|paste code|opening browser|press enter/i.test(l));
-  return (lines.at(-1) ?? '').slice(0, 300);
-}
-
-/** Runs a command to the end; never rejects. `last` is the last line it said on stderr (or stdout). */
-function run(cmd: string, args: string[], env: Record<string, string>, input?: string): Promise<{ code: number; out: string; last: string }> {
-  return new Promise((resolve) => {
-    const p = execFile(cmd, args, { env, timeout: LOOK_TIMEOUT_MS, maxBuffer: 1024 * 1024, encoding: 'utf8' }, (err, stdout, stderr) => {
-      const e = err as { code?: number | string } | null;
-      const code = !e ? 0 : typeof e.code === 'number' ? e.code : -1;
-      const last = lastWords(stderr || (err && !stdout ? err.message : ''));
-      resolve({ code, out: stdout.trim(), last });
-    });
-    if (input !== undefined) p.stdin?.end(input);
-    else p.stdin?.end();
-  });
 }

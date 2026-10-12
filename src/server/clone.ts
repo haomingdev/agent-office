@@ -3,7 +3,7 @@ import { closeSync, fstatSync, openSync, readSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import type { CloneProgress } from '../shared/protocol.js';
 
-// One `gh repo clone`, run so the office can see how it's getting on. git's progress goes to a log
+// One `gh repo clone` (or `git clone` of a GitLab project), run so the office can see how it's getting on. git's progress goes to a log
 // file, which the office reads every second: that says how far along it is, and a log that stops
 // growing is a clone that's stuck. The clone runs in its own session with no terminal, so an ssh
 // host-key question or a password prompt fails it straight away instead of waiting, unseen, on the
@@ -96,8 +96,11 @@ export class CloneRun {
     this.timer = setInterval(() => this.tick(), opts.tickMs ?? 1000);
   }
 
-  /** Starts `gh repo clone repo dest`, writing to `log`. Resolves once it's running, or to why it couldn't start. */
-  static start(repo: string, dest: string, log: string, opts: CloneRunOptions = {}): Promise<CloneRun | string> {
+  /**
+   * Starts `gh repo clone repo dest`, or with `from` (a GitLab project's URL) `git clone from dest`,
+   * writing to `log`. Resolves once it's running, or to why it couldn't start.
+   */
+  static start(repo: string, dest: string, log: string, opts: CloneRunOptions = {}, from?: string): Promise<CloneRun | string> {
     let fd: number;
     try {
       fd = openSync(log, 'w', 0o600);
@@ -107,7 +110,8 @@ export class CloneRun {
     return new Promise((resolve) => {
       let child: ChildProcess;
       try {
-        child = spawn('gh', ['repo', 'clone', repo, dest, '--', '--progress'], {
+        const [cmd, args] = from ? ['git', ['clone', '--progress', '--', from, dest]] : ['gh', ['repo', 'clone', repo, dest, '--', '--progress']];
+        child = spawn(cmd, args, {
           cwd: path.dirname(dest),
           detached: GROUPS,
           stdio: ['ignore', fd, fd],
@@ -118,7 +122,7 @@ export class CloneRun {
       } finally {
         closeSync(fd);
       }
-      child.once('error', (err: NodeJS.ErrnoException) => resolve(err.code === 'ENOENT' ? "The GitHub CLI (gh) isn't installed on the office's machine" : `Couldn't run gh: ${err.message}`));
+      child.once('error', (err: NodeJS.ErrnoException) => resolve(err.code === 'ENOENT' ? (from ? "git isn't installed on the office's machine" : "The GitHub CLI (gh) isn't installed on the office's machine") : `Couldn't run ${from ? 'git' : 'gh'}: ${err.message}`));
       child.once('spawn', () => {
         const run = new CloneRun(child.pid!, log, child, opts);
         child.once('exit', (code) => run.end(code));
@@ -239,10 +243,10 @@ function alive(pid: number): boolean {
   }
 }
 
-/** The process is a `gh repo clone` (the pid wasn't handed to something else since). */
+/** The process is a `gh repo clone` or a `git clone` (the pid wasn't handed to something else since). */
 function isClone(pid: number): boolean {
   try {
-    return /\brepo clone\b/.test(execFileSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }));
+    return /\b(?:repo clone|git clone)\b/.test(execFileSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }));
   } catch {
     return false;
   }

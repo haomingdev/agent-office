@@ -1,6 +1,7 @@
 import './palette.css';
 import { rankItems, type PaletteItem, type PaletteMatch } from '../../shared/palette';
 import { h, openModal, type Modal } from './dom';
+import { words } from './forge';
 
 // The command palette (Ctrl+K, ⌘K on a Mac): a few letters find a worker, an issue, a pull request,
 // a board, a teammate or an action, and Enter opens it the way clicking it in the office does.
@@ -28,7 +29,7 @@ export function togglePalette(entries: () => PaletteEntry[]) {
   const all = entries();
   const input = h('input', {
     type: 'text',
-    placeholder: 'Find a worker, issue, PR, board, teammate or action…',
+    placeholder: `Find a worker, issue, ${words().pr}, board, teammate or action…`,
     autocomplete: 'off',
     spellcheck: 'false',
     'aria-label': 'Find anything in the office',

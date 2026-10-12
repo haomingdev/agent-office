@@ -44,9 +44,16 @@ function alerts(root: HTMLElement) {
 }
 
 const REF_RE = /(^|[^\w/&#`])(#(\d+)|@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38})))\b/g;
+/** On a GitLab: #123 is an issue, !123 a merge request, and a username may have dots and underscores. */
+const LAB_REF_RE = /(^|[^\w/&#`!])(#(\d+)|@([A-Za-z0-9_](?:[A-Za-z0-9_.-]{0,254}[A-Za-z0-9_])?)|!(\d+))\b/g;
 
-/** Links #123 to the issue or PR and @name to the person, outside code and existing links. */
-function linkify(root: HTMLElement, repoUrl?: string) {
+/** A GitLab's issue or merge request page: https://host/group/project/-/issues/12. */
+const isLab = (itemUrl: string | undefined) => !!itemUrl && /\/-\/(?:merge_requests|issues)\/\d+/.test(itemUrl);
+
+/** Links #123 to the issue or PR (and on a GitLab !123 to the merge request) and @name to the person, outside code and existing links. */
+function linkify(root: HTMLElement, repoUrl?: string, lab = false) {
+  const re = lab ? LAB_REF_RE : REF_RE;
+  const site = lab && repoUrl ? new URL(repoUrl).origin : 'https://github.com';
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (n) => (n.parentElement?.closest('a, code, pre') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
   });
@@ -54,16 +61,17 @@ function linkify(root: HTMLElement, repoUrl?: string) {
   while (walker.nextNode()) texts.push(walker.currentNode as Text);
   for (const t of texts) {
     const s = t.data;
-    REF_RE.lastIndex = 0;
-    if (!REF_RE.test(s)) continue;
-    REF_RE.lastIndex = 0;
+    re.lastIndex = 0;
+    if (!re.test(s)) continue;
+    re.lastIndex = 0;
     const frag = document.createDocumentFragment();
     let at = 0;
-    for (let m = REF_RE.exec(s); m; m = REF_RE.exec(s)) {
+    for (let m = re.exec(s); m; m = re.exec(s)) {
       const start = m.index + m[1].length;
-      const href = m[3] ? (repoUrl ? `${repoUrl}/issues/${m[3]}` : '') : `https://github.com/${m[4]}`;
+      const issues = lab ? '-/issues' : 'issues';
+      const href = m[3] ? (repoUrl ? `${repoUrl}/${issues}/${m[3]}` : '') : m[5] ? (repoUrl ? `${repoUrl}/-/merge_requests/${m[5]}` : '') : `${site}/${m[4]}`;
       if (!href) continue;
-      frag.append(s.slice(at, start), h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: m[3] ? 'ref' : 'mention' }, m[2]));
+      frag.append(s.slice(at, start), h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: m[3] || m[5] ? 'ref' : 'mention' }, m[2]));
       at = start + m[2].length;
     }
     frag.append(s.slice(at));
@@ -73,13 +81,16 @@ function linkify(root: HTMLElement, repoUrl?: string) {
 
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
-/** Relative links in a PR body mean GitHub pages: #anchors on the PR, paths in the repo. */
+/** Relative links in a PR body mean GitHub (or GitLab) pages: #anchors on the PR, paths in the repo. */
 function absolutize(root: HTMLElement, itemUrl: string, repoUrl: string) {
+  const lab = isLab(itemUrl);
   const fix = (v: string, anchors: boolean) => {
     if (!v || SCHEME_RE.test(v) || v.startsWith('//')) return v;
     if (v.startsWith('#')) return anchors ? `${itemUrl.split('#')[0]}${v}` : v;
-    if (v.startsWith('/')) return `https://github.com${v}`;
-    return `${repoUrl}/blob/HEAD/${v.replace(/^\.\//, '')}`;
+    // GitLab's attachments (/uploads/<hash>/f.png) are the project's, not the site's.
+    if (lab && v.startsWith('/uploads/')) return `${repoUrl}${v}`;
+    if (v.startsWith('/')) return `${lab ? new URL(itemUrl).origin : 'https://github.com'}${v}`;
+    return `${repoUrl}/${lab ? '-/' : ''}blob/HEAD/${v.replace(/^\.\//, '')}`;
   };
   for (const a of root.querySelectorAll('a[href]')) a.setAttribute('href', fix(a.getAttribute('href') ?? '', true));
   for (const img of root.querySelectorAll('img[src]')) img.setAttribute('src', fix(img.getAttribute('src') ?? '', false));
@@ -90,7 +101,7 @@ function sanitized(html: string): DocumentFragment {
   return purify.sanitize(html, { RETURN_DOM_FRAGMENT: true, FORBID_TAGS: ['style', 'form', 'button', 'select', 'textarea'], FORBID_ATTR: ['style'] });
 }
 
-/** Renders markdown into a `.md` block. `itemUrl` (the issue or PR on GitHub) anchors its links. */
+/** Renders markdown into a `.md` block. `itemUrl` (the issue or PR on GitHub or GitLab) anchors its links. */
 export function markdown(src: string, itemUrl?: string): HTMLElement {
   const el = h('div.md');
   if (!src.trim()) {
@@ -101,7 +112,7 @@ export function markdown(src: string, itemUrl?: string): HTMLElement {
   const repoUrl = itemUrl ? repoUrlOf(itemUrl) : undefined;
   if (itemUrl && repoUrl) absolutize(el, itemUrl, repoUrl);
   alerts(el);
-  linkify(el, repoUrl);
+  linkify(el, repoUrl, isLab(itemUrl));
   return el;
 }
 
@@ -117,7 +128,7 @@ export function markdownFile(src: string): HTMLElement {
   return el;
 }
 
-/** https://github.com/owner/repo from an issue or PR URL. */
+/** https://github.com/owner/repo from an issue or PR URL (https://host/group/project from a GitLab's). */
 export function repoUrlOf(itemUrl: string): string {
-  return itemUrl.replace(/\/(pull|issues)\/\d+.*$/, '');
+  return itemUrl.replace(/\/-\/(?:merge_requests|issues)\/\d+.*$/, '').replace(/\/(pull|issues)\/\d+.*$/, '');
 }

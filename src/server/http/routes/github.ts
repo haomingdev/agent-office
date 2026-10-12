@@ -15,10 +15,10 @@ export const githubRoutes = {
       // The repo's labels (for the label picker) are the one thing not about a single issue or PR.
       if (p !== '/api/gh/labels' && (!Number.isSafeInteger(n) || n <= 0)) return send(res, 400, { error: 'Bad number' });
       if (!floor) return send(res, 404, { error: 'No such floor' });
-      const github = floor.github;
+      const github = floor.forge;
       try {
-        // "You" on comments is your own GitHub login once you've signed in to it.
-        const me = session.account ? ctx.signins.githubLogin(session.account.id) : undefined;
+        // "You" on comments is your own GitHub (or GitLab) login once you've signed in to it.
+        const me = session.account ? ctx.signins.githubLogin(session.account.id, github.kind) : undefined;
         if (p === '/api/gh/pull') return send(res, 200, await github.pullDetail(n, me));
         if (p === '/api/gh/issue') return send(res, 200, await github.issueDetail(n, me));
         if (p === '/api/gh/labels') return send(res, 200, await github.repoLabels());

@@ -1,6 +1,6 @@
 import './elevator.css';
 import type { CloneProgress, FloorInfo, RepoChoice, ServerMsg } from '../../shared/protocol';
-import { cloneLabel, cloneStep, floorPalette, normalizeRepo, sameRepo } from '../../shared/floors';
+import { cloneLabel, cloneStep, floorPalette, gitlabProject, normalizeRepo, sameRepo } from '../../shared/floors';
 import { ROOF, ROOF_NAME } from '../../shared/rooftop';
 import type { Net } from '../net';
 import { store } from '../state';
@@ -8,7 +8,7 @@ import { h, openModal, timeAgo, toast, type Modal } from './dom';
 import { confirmDialog } from './prompt';
 
 // The elevator's panel: a button for every floor (every project), and "add a project", which clones
-// one of the repositories the office's gh login can see and makes it a new floor. The first time
+// one of the repositories the office's gh (or glab) login can see and makes it a new floor. The first time
 // the office runs there are no floors, and this is where you start. Admins can take a floor off the
 // building here too; its checkout stays on disk. Under the floors, it goes down to the garage.
 
@@ -28,7 +28,7 @@ export interface ElevatorOptions {
 
 /** How many repositories the list shows at once; typing narrows it down. */
 const SHOWN = 60;
-/** Ask gh for the repositories again after this long. */
+/** Ask gh (and glab) for the repositories again after this long. */
 const REPOS_STALE_MS = 5 * 60_000;
 /** Longer than the office takes to ask GitHub about a repository before its clone starts. */
 const START_MS = 60_000;
@@ -76,11 +76,11 @@ export function openElevator(opts: ElevatorOptions): void {
 
   const floorsEl = h('div.floors');
   const addEl = h('div.add');
-  const input = h('input', { type: 'text', placeholder: 'Search your repositories, or type owner/name', 'aria-label': 'Repository', autocomplete: 'off', spellcheck: 'false' }) as HTMLInputElement;
+  const input = h('input', { type: 'text', placeholder: 'Search your repositories, or type owner/name (or a GitLab URL)', 'aria-label': 'Repository', autocomplete: 'off', spellcheck: 'false' }) as HTMLInputElement;
   const listEl = h('div.repo-list', { role: 'listbox', 'aria-label': 'Repositories' });
   const statusEl = h('div');
   const addBtn = h('button.btn.primary', { type: 'button' }, '🛗 Add floor');
-  const refreshBtn = h('button.btn', { type: 'button', title: 'Ask GitHub for the list again' }, '↻');
+  const refreshBtn = h('button.btn', { type: 'button', title: 'Ask GitHub and GitLab for the list again' }, '↻');
   const close = h('button.btn.close', { type: 'button', 'aria-label': 'Close', title: 'Close (Esc)' }, '✕');
 
   // Where clones go. Admins can move it right here: the first project is when it matters.
@@ -114,7 +114,7 @@ export function openElevator(opts: ElevatorOptions): void {
     net.send({ t: 'floor.repos' });
   };
 
-  /** What "Add floor" would add: the row picked, else what's typed if it's owner/name. */
+  /** What "Add floor" would add: the row picked, else what's typed if it's owner/name (or a GitLab project). */
   const choice = (): string | undefined => selected ?? normalizeRepo(filter);
 
   const floorButton = (f: FloorInfo, i: number) => {
@@ -273,26 +273,26 @@ export function openElevator(opts: ElevatorOptions): void {
     const typed = normalizeRepo(filter);
     const matches = r.list.filter((x) => !q || x.name.toLowerCase().includes(q) || (x.description ?? '').toLowerCase().includes(q));
     const rows: HTMLElement[] = [];
-    // owner/name that isn't in the list (someone else's public repository): offer it anyway.
+    // owner/name (or a GitLab project) that isn't in the list (someone else's public repository): offer it anyway.
     if (typed && !r.list.some((x) => sameRepo(x.name, typed))) rows.push(repoRow({ name: typed, private: false, description: 'Not in your list — the office will try to clone it' }));
     rows.push(...matches.slice(0, SHOWN).map(repoRow));
-    if (!rows.length) rows.push(h('p.empty', { style: 'padding:10px' }, r.loading ? 'Asking GitHub for your repositories…' : r.error ? '' : q ? 'Nothing matches. Type owner/name to clone any repository.' : 'No repositories.'));
+    if (!rows.length) rows.push(h('p.empty', { style: 'padding:10px' }, r.loading ? 'Asking GitHub and GitLab for your repositories…' : r.error ? '' : q ? 'Nothing matches. Type owner/name, or host/group/project for a GitLab, to clone any repository.' : 'No repositories.'));
     if (matches.length > SHOWN) rows.push(h('p.empty', { style: 'padding:8px 10px' }, `…and ${matches.length - SHOWN} more — type to narrow it down`));
     listEl.replaceChildren(...rows);
     const pick = choice();
     const dest = pick ? `${store.projectsDir.dir}/${pick}` : `${store.projectsDir.dir}/<owner>/<repo>`;
     const change = store.me.admin ? h('button.btn.dir-change', { type: 'button', title: 'Clone new projects into another folder on the office’s machine' }, '📁 Change folder') : null;
     change?.addEventListener('click', () => editDir(true));
-    // While it clones: how far it's got (the office asks GitHub about it first).
+    // While it clones: how far it's got (the office asks GitHub or the GitLab about it first).
     const on = addingFloor();
     const lines = adding
       ? [
-          h('p.note.busy', {}, on ? `⏳ Cloning ${on.repo ?? adding} into ${store.projectsDir.dir}/${on.repo ?? adding}` : `⏳ Asking GitHub about ${adding}…`),
+          h('p.note.busy', {}, on ? `⏳ Cloning ${on.repo ?? adding} into ${store.projectsDir.dir}/${on.repo ?? adding}` : `⏳ Asking ${gitlabProject(adding)?.host ?? 'GitHub'} about ${adding}…`),
           on ? cloneBar(on.clone) : null,
           on ? h('p.note', {}, [cloneStep(on.clone), on.clone?.detail].filter(Boolean).join(' · ')) : null,
           h('p.note', {}, 'You can close this and carry on: everyone hears when the new floor opens.'),
         ]
-      : [h('p.note', {}, `Cloned into ${dest} with this machine's gh login. Everything on the new floor works in that checkout.`, change)];
+      : [h('p.note', {}, `Cloned into ${dest} with this machine's gh login (glab's for a GitLab). Everything on the new floor works in that checkout.`, change)];
     statusEl.replaceChildren(...lines.filter((l): l is HTMLElement => !!l), ...[r.error, error].filter(Boolean).map((e) => h('p.err', {}, e)));
     addBtn.disabled = !!adding || !pick || store.floors.some((f) => sameRepo(f.repo, pick));
     addBtn.textContent = adding ? '⏳ Cloning…' : pick ? `🛗 Add ${pick}` : '🛗 Add floor';

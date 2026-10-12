@@ -1,9 +1,11 @@
 /** The bookshelf: the project's docs to read, with a book in your hands (and a swish as its pages turn). */
+import { gitlabProject } from '../../../shared/floors';
 import type { Ctx } from '../../core/context';
 import { aside, hintTitle, key, onE } from '../../core/hint';
 import { saveSettings, store } from '../../state';
 import { openBookshelf } from './ui';
 import { clip, toast } from '../../ui/dom';
+import { words } from '../../ui/forge';
 
 // The kinds of thing you can use that this defines (see InteractKinds in world/types.ts).
 declare module '../../world/types' {
@@ -12,8 +14,10 @@ declare module '../../world/types' {
   }
 }
 
-/** The project on GitHub, from the floor's origin remote, when that's where it is. */
-function githubUrl(remote?: string): string | undefined {
+/** The project on GitHub, from the floor's origin remote, or on its GitLab, when that's where it is. */
+function projectUrl(remote?: string): string | undefined {
+  const lab = gitlabProject(store.currentFloor()?.repo);
+  if (lab) return `https://${lab.host}/${lab.path}`;
   const m = /github\.com[:/]([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/.exec(remote ?? '');
   return m ? `https://github.com/${m[1]}` : undefined;
 }
@@ -26,7 +30,8 @@ export function installBookshelf(ctx: Ctx) {
     openBookshelf({
       floor: store.floor,
       project: store.project?.name,
-      repoUrl: githubUrl(store.project?.remote),
+      repoUrl: projectUrl(store.project?.remote),
+      site: words().site,
       onTurn: turnPage,
       pageSound: settings.pageTurns,
       onPageSound: (on) => {

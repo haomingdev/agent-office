@@ -9,7 +9,7 @@ import { isAgentEffort, isAgentProvider, tokensOf, type AgentChoice, type AgentE
 import { validateWorkerEffort, validateWorkerModel } from './agents.js';
 import { providerMeta, takesEffort, takesModel } from '../shared/providers.js';
 import { gitError, type WorktreeRef, type WorktreeState } from './worktrees.js';
-import { PROMPTS, fillPrompt, type PromptId, type PromptVars } from '../shared/prompts.js';
+import { PROMPTS, fillPrompt, meetingRefs, type PromptId, type PromptVars } from '../shared/prompts.js';
 
 const execFileP = promisify(execFile);
 
@@ -42,8 +42,9 @@ export interface MeetingEvents {
   hiringPaused(): string | undefined;
   /** Posts the review panel's review on its pull request. Resolves to the review's URL. */
   postReview(pr: number, file: string, owner?: string): Promise<string>;
-  /** One of the office's prompts as it has it now (rewritten in ⚙️ Settings, or the default). */
+  /** One of the office's prompts as it has it now (rewritten in ⚙️ Settings, or the default), and where the floor's pull requests are. */
   prompt?(id: PromptId): string;
+  forge?(): 'github' | 'gitlab';
 }
 
 const PUMP_MS = 3000;
@@ -533,8 +534,7 @@ export class MeetingRoom {
       others: list(others),
       how: how[m.pattern],
       about: m.prompt,
-      pullRequest: m.pr !== undefined ? `The pull request is #${m.pr}: read it with gh pr view ${m.pr} and gh pr diff ${m.pr}.` : '',
-      issue: m.issue !== undefined ? `It comes from GitHub issue #${m.issue}: gh issue view ${m.issue} --comments.` : '',
+      ...meetingRefs(this.events.forge?.(), m.pr, m.issue),
       cwd: this.cwd(m),
       notes: path.join(this.cwd(m), m.notes),
       output: m.output,

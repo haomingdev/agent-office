@@ -7,7 +7,7 @@ import type { WorkerRig } from './rig';
 import { ease, popIn } from './curves';
 import { undress } from './props';
 import { ACT_MIN, DESPAIR_MIN, TWIRL_TIME, WAIT_CYCLE, WAIT_HOPS, blendStance, type Act, type Stance } from './worker-stance';
-import { STATUS_BULB, bubbleFor } from './worker-badges';
+import { STATUS_BULB, bubbleFor, type NamedPr } from './worker-badges';
 import { globe, papers } from './worker-props';
 import { DANCE, groove, type Dancing, type Stage } from './worker-dance';
 import { DEAD, STARVED, bones, crossedEyes, slump } from './worker-jail';
@@ -30,7 +30,7 @@ export class Worker {
   private bubbleIsCard = false;
   private task: WorkerTask | undefined;
   /** Its pull request, open or merged: its bubble is outlined (and labelled, while it rests) to match. */
-  private pr: WorkerPr | undefined;
+  private pr: NamedPr | undefined;
   /** Its worktree was deleted outside the office (WorkerInfo.lost): its bubble says so until it's fixed. */
   private lost = false;
   private nameTag: THREE.Sprite | null = null;
@@ -297,8 +297,8 @@ export class Worker {
     this.drawBubble();
   }
 
-  setPr(pr: WorkerPr | undefined) {
-    this.pr = pr;
+  setPr(pr: WorkerPr | undefined, name?: string) {
+    this.pr = pr && { ...pr, name };
     this.drawBubble();
   }
 

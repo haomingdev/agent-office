@@ -2,6 +2,7 @@
 
 import type { CabinetView } from '../cabinet.js';
 import type { Decoration } from '../decor.js';
+import type { ForgeKind } from '../floors.js';
 import type { DogState } from '../dog.js';
 import type { FloorPlan } from '../floorplan.js';
 import type { CarState } from '../garage.js';
@@ -34,8 +35,10 @@ export interface FloorInfo {
   id: string;
   /** The repository's name, or the folder's when it isn't on GitHub. */
   name: string;
-  /** owner/name on GitHub. */
+  /** owner/name on GitHub, host/group/…/project on a GitLab (see normalizeRepo). */
   repo?: string;
+  /** Where its issues and pull requests are: GitHub, or a GitLab (merge requests). Unset while it's being cloned. */
+  forge?: ForgeKind;
   /** Its checkout on the office's machine. */
   dir: string;
   /** The branch that checkout is on ('HEAD' when detached); none when it isn't a git checkout. */
@@ -85,7 +88,7 @@ export interface ProjectsDirState {
 
 /** A repository the office's `gh` login can clone, for the elevator's "add a project". */
 export interface RepoChoice {
-  /** owner/name */
+  /** owner/name, or host/group/…/project on a GitLab */
   name: string;
   description?: string;
   private: boolean;

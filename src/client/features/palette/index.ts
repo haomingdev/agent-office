@@ -14,6 +14,7 @@ import { store } from '../../state';
 import { openAccounts } from '../../ui/accounts';
 import { openBoard } from '../../ui/boards';
 import { STATUS_LABEL, toast } from '../../ui/dom';
+import { words } from '../../ui/forge';
 import { paletteOpen, togglePalette, type PaletteEntry } from '../../ui/palette';
 import { openIssue, openPull } from '../../ui/pull';
 import { openServices, serviceUrl } from '../../ui/services';
@@ -67,6 +68,7 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
   function paletteEntries(): PaletteEntry[] {
     const { waiting, actions, meeting, hanging } = parts;
     const out: PaletteEntry[] = [];
+    const fw = words();
     for (const w of store.workers.values()) {
       const desk = DESK_BY_ID.get(w.deskId);
       const spot = desk && deskSpot(desk);
@@ -101,17 +103,17 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
     out.push({ icon: '🔎', kind: 'Action', title: 'Search the chat and every terminal', keywords: ['find'], open: showSearch });
 
     out.push(at('issues', 'the Issues board', { icon: '📌', kind: 'Board', title: 'Issues board', open: () => openBoard('issues', net, actions.boardActions()) }));
-    out.push(at('pulls', 'the PR board', { icon: '🔀', kind: 'Board', title: 'PR board', keywords: ['pull requests'], open: () => openBoard('pulls', net, actions.boardActions()) }));
+    out.push(at('pulls', `the ${fw.pr} board`, { icon: '🔀', kind: 'Board', title: `${fw.pr} board`, keywords: ['pull requests', 'merge requests'], open: () => openBoard('pulls', net, actions.boardActions()) }));
     out.push(at('services', 'the Services board', { icon: '🌐', kind: 'Board', title: 'Services board', detail: 'Web servers the workers are running', open: () => openServices() }));
     out.push(at('whiteboard', 'the whiteboard', { icon: '📝', kind: 'Board', title: 'Whiteboard', open: () => openWhiteboard(net) }));
     out.push(at('meeting', 'the meeting room', { icon: '🤝', kind: 'Board', title: 'Meeting room', keywords: ['call a meeting'], open: () => meeting.showMeeting() }));
 
     for (const pr of store.pulls.items) {
       out.push(
-        at('pulls', 'the PR board', {
+        at('pulls', `the ${fw.pr} board`, {
           icon: '🔀',
-          kind: 'PR',
-          title: `#${pr.number} ${pr.title}`,
+          kind: fw.pr,
+          title: `${fw.ref}${pr.number} ${pr.title}`,
           detail: [pr.isDraft ? 'Draft' : pr.state.toLowerCase(), pr.headRefName, pr.author].join(' · '),
           open: () => openPull(pr, net, actions.boardActions()),
         }),

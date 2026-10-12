@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { GhIssue, GhPull, GhState, QueueState, QueueTask, ServiceInfo, WorkerInfo } from '../../../shared/protocol';
 import { store, workerForPull } from '../../state';
+import { prName, words } from '../../ui/forge';
 
 export const NOTE_COLORS = ['#fff7b0', '#ffd6e0', '#caffbf', '#bde0fe', '#ffe5b4'];
 export const PINS = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166'];
@@ -98,7 +99,7 @@ export class BoardTexture {
     }
     const open = (state.items as (GhIssue | GhPull)[]).filter((i) => i.state === 'OPEN');
     if (!open.length) {
-      const note = state.error ? `⚠️ ${state.error}` : state.loading && !state.fetchedAt ? 'Loading…' : this.kind === 'issues' ? 'No open issues 🎉' : 'No open PRs';
+      const note = state.error ? `⚠️ ${state.error}` : state.loading && !state.fetchedAt ? 'Loading…' : this.kind === 'issues' ? 'No open issues 🎉' : `No open ${words().pr}s`;
       g.font = '800 40px Nunito, ui-rounded, system-ui, sans-serif';
       const lines = wrap(g, note.replace(/`/g, ''), 760, 4);
       const boxH = 60 + lines.length * 50;
@@ -150,7 +151,7 @@ export class BoardTexture {
       const w = this.kind === 'pulls' && workers ? workerForPull(workers.values(), it as GhPull) : undefined;
       const footer = w ? fs * 1.3 : 0;
       g.font = `900 ${Math.round(fs * 1.35)}px Nunito, ui-rounded, system-ui, sans-serif`;
-      g.fillText(`#${it.number}`, -nw / 2 + 14, -nh / 2 + fs * 2);
+      g.fillText(`${this.kind === 'pulls' ? words().ref : '#'}${it.number}`, -nw / 2 + 14, -nh / 2 + fs * 2);
       g.font = `700 ${fs}px Nunito, ui-rounded, system-ui, sans-serif`;
       wrap(g, it.title, nw - 28, Math.max(2, Math.floor((nh - fs * 3 - footer) / (fs * 1.1)))).forEach((line, li) => g.fillText(line, -nw / 2 + 14, -nh / 2 + fs * 3.4 + li * fs * 1.1));
       if (w) {
@@ -302,7 +303,7 @@ export class QueueBoardTexture {
       ...done.map((t) => ({
         icon: t.outcome === 'done' ? '✅' : '⚠️',
         text: name(t),
-        side: t.pr ? `PR #${t.pr.number}${t.pr.state === 'MERGED' ? ' · merged' : ''}` : t.outcome === 'done' ? 'done' : t.outcome === 'failed' ? "didn't start" : t.outcome === 'killed' ? 'sent home' : 'stopped',
+        side: t.pr ? `${prName(t.pr.number)}${t.pr.state === 'MERGED' ? ' · merged' : ''}` : t.outcome === 'done' ? 'done' : t.outcome === 'failed' ? "didn't start" : t.outcome === 'killed' ? 'sent home' : 'stopped',
         color: '#8a8f98',
       })),
     ];

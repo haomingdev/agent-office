@@ -3,6 +3,7 @@ import type { AgentProvider, QueueTask, Usage } from '../../shared/protocol';
 import type { Net } from '../net';
 import { store } from '../state';
 import { h, openModal, timeAgo, STATUS_LABEL } from './dom';
+import { prName, words } from './forge';
 import { confirmDialog } from './prompt';
 import { providerPicker, providerLabel, providerUsageState, providerWaitingLabel, resolvedProvider, modelBadge } from './provider';
 import { officeFull } from '../../shared/machine';
@@ -23,7 +24,7 @@ function taskTitle(t: QueueTask): HTMLElement {
 function outcome(t: QueueTask): string {
   switch (t.outcome) {
     case 'done':
-      return t.pr ? 'finished' : 'finished, no PR found yet';
+      return t.pr ? 'finished' : `finished, no ${words().pr} found yet`;
     case 'exited':
       return t.error ? `stopped: ${t.error}` : 'stopped before finishing';
     case 'killed':
@@ -129,7 +130,7 @@ export function openQueue(net: Net, actions: QueueActions) {
       if (t.workerName) meta.push(t.workerName);
       if (t.branch) meta.push(`🌿 ${t.branch}`);
       if (t.finishedAt) meta.push(timeAgo(t.finishedAt));
-      if (t.pr) buttons.push(h('a.btn', { href: t.pr.url, target: '_blank', rel: 'noopener', title: t.pr.title }, `🔀 PR #${t.pr.number}${t.pr.state === 'MERGED' ? ' ✓' : t.pr.state === 'DRAFT' ? ' (draft)' : ''}`));
+      if (t.pr) buttons.push(h('a.btn', { href: t.pr.url, target: '_blank', rel: 'noopener', title: t.pr.title }, `🔀 ${prName(t.pr.number)}${t.pr.state === 'MERGED' ? ' ✓' : t.pr.state === 'DRAFT' ? ' (draft)' : ''}`));
       if (w) buttons.push(h('button.btn', { type: 'button', onclick: () => actions.openTerminal(w.id) }, '🖥️ Terminal'));
       buttons.push(h('button.btn', { type: 'button', title: 'Put it back on the queue', onclick: () => net.send({ t: 'queue.retry', taskId: t.id }) }, '↻ Requeue'));
       buttons.push(h('button.btn', { type: 'button', title: 'Forget it', 'aria-label': 'Remove', onclick: () => net.send({ t: 'queue.remove', taskId: t.id }) }, '✕'));
@@ -163,7 +164,7 @@ export function openQueue(net: Net, actions: QueueActions) {
         h('b', {}, 'Add to queue'),
         ' on an issue. Whenever a desk is free and fewer than ',
         h('b', {}, q.maxWorkers === 0 ? '0' : String(q.maxWorkers)),
-        " of its tasks are running, the next task gets a fresh worker in its own git worktree (workers you hire yourself don't count). Issues are assigned on GitHub when they start, and the pull request is linked when it shows up.",
+        ` of its tasks are running, the next task gets a fresh worker in its own git worktree (workers you hire yourself don't count). Issues are assigned on ${words().site} when they start, and the ${words().pullRequest} is linked when it shows up.`,
       ),
       queued.length && officeFull(m)
         ? h('p.note', {}, `⏸ The office is at its limit of ${m.limit} worker${m.limit === 1 ? '' : 's'}, so the next task waits until one goes home. A queue worker that's finished goes home by itself to make room.`)

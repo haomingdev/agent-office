@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { ImageResult } from './decor.js';
+import { pullRequestsAt } from './forge.js';
 import { changedImageType, type ChangedFile, type ChangeStatus, type ChangesState } from '../shared/protocol.js';
 
 // What a worker changed, for the Changes window at its desk: the files it touched and their diff,
@@ -306,7 +307,7 @@ export class Changes {
     });
   }
 
-  /** Pushes the branch and opens a pull request for it with `gh`; with `env`, as whoever pressed the button. */
+  /** Pushes the branch and opens a pull request for it (a merge request on GitLab); with `env`, as whoever pressed the button. */
   async pullRequest(workerId: string, title: string, body: string, who: string, env?: Record<string, string>, repo?: string): Promise<string | undefined> {
     if (!title.trim()) return 'The pull request needs a title';
     return this.action(workerId, repo, 'Pushing the branch and opening a pull request…', async (t, w) => {
@@ -319,12 +320,10 @@ export class Changes {
       const remote = remotes.includes('origin') ? 'origin' : remotes[0];
       if (!remote) return 'This project has no git remote to push to';
       await git(['push', '-u', remote, s.branch], t.cwd, 120_000, env);
-      const r = await run('gh', ['pr', 'create', '--head', s.branch, '--base', s.prBase, '--title', title.trim(), '--body', body], t.cwd, 120_000, env);
-      const url = r.out.trim().split('\n').pop() ?? '';
-      if (r.code !== 0 || !/^https?:\/\//.test(url)) throw new GitError(reason(r, url || 'gh pr create failed'));
-      const number = Number(/\/(\d+)$/.exec(url)?.[1] ?? 0);
+      const prs = pullRequestsAt(t.cwd);
+      const { number, url } = await prs.create(s.branch, s.prBase, title.trim(), body, t.cwd, env && { key: '', env });
       this.opened.set(openedKey(repo, s.branch), { number, url });
-      this.events.toast(`${who} opened a pull request for ${t.name}: ${url}`, 'info');
+      this.events.toast(`${who} opened a ${prs.kind === 'gitlab' ? 'merge' : 'pull'} request for ${t.name}: ${url}`, 'info');
       (t.refreshGitHub ?? this.events.refreshGitHub)();
       return undefined;
     });

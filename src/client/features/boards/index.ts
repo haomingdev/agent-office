@@ -12,6 +12,7 @@ import { openBoard } from '../../ui/boards';
 import { inProgress } from '../../ui/github/progress';
 import type { BoardActions } from '../../ui/github/prompts';
 import { clip } from '../../ui/dom';
+import { words } from '../../ui/forge';
 import { openIssue } from '../../ui/pull';
 import { openServices } from '../../ui/services';
 import { BoardTexture, QueueBoardTexture, ServicesBoardTexture } from './world';
@@ -116,7 +117,7 @@ export function installBoards(ctx: Ctx, deps: BoardsDeps) {
   });
   ctx.interactions.define('pulls', {
     reach: 9,
-    hint: () => boardHint('🔀 Pull request board'),
+    hint: () => boardHint(`🔀 ${words().site === 'GitLab' ? 'Merge' : 'Pull'} request board`),
     use: onE(() => openBoard('pulls', ctx.net, deps.boardActions())),
   });
   ctx.interactions.define('services', {

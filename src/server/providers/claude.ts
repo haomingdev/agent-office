@@ -163,7 +163,7 @@ function claudeHook(h: WorkerHandle, event: string, payload: any): boolean {
     case 'PostToolUse':
     case 'PostToolUseFailure':
       noteOutcome(h, payload, event === 'PostToolUseFailure');
-      // It opened a pull request itself (`gh pr create`): that one is its own.
+      // It opened a pull request itself (`gh pr create`, or `glab mr create`): that one is its own.
       h.notePr(payload?.tool_input?.command, toolOutput(payload));
       answered(h, now);
       break;

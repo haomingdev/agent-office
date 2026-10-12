@@ -2,6 +2,7 @@ import './windows.css';
 import type { GhIssue, GhLabel, GhPull } from '../../../shared/protocol';
 import type { Net } from '../../net';
 import { h, openModal } from '../dom';
+import { words } from '../forge';
 import { repoUrlOf } from '../markdown';
 import { getJson, labelWaiters } from './api';
 import { errorBox, spinnerRow } from './pieces';
@@ -23,8 +24,10 @@ export function openLabels(kind: 'issue' | 'pull', it: GhIssue | GhPull, net: Ne
   const key = `${kind}:${it.number}`;
   const had = new Set(it.labels.map((l) => l.name));
   const on = new Set(had);
-  const noun = kind === 'pull' ? 'PR' : 'issue';
-  const manage = `${repoUrlOf(it.url)}/labels`;
+  const fw = words();
+  const noun = kind === 'pull' ? fw.pr : 'issue';
+  const ref = kind === 'pull' ? fw.ref : '#';
+  const manage = `${repoUrlOf(it.url)}${fw.site === 'GitLab' ? '/-' : ''}/labels`;
   let repo: GhLabel[] | null = null;
   let error = '';
   let busy = false;
@@ -41,8 +44,8 @@ export function openLabels(kind: 'issue' | 'pull', it: GhIssue | GhPull, net: Ne
   const save = h('button.btn.primary', { type: 'button' }, '🏷️ Save labels');
   const el = h(
     'div.modal.gh-merge.gh-labeler',
-    { role: 'dialog', 'aria-label': `Labels on ${noun} #${it.number}` },
-    h('header', {}, h('h2', {}, `🏷️ Labels on ${noun} #${it.number}`)),
+    { role: 'dialog', 'aria-label': `Labels on ${noun} ${ref}${it.number}` },
+    h('header', {}, h('h2', {}, `🏷️ Labels on ${noun} ${ref}${it.number}`)),
     h('div.body', {}, h('p.gh-merge-title', {}, it.title), filter, list, none, result),
     h('footer', {}, summary, cancel, save),
   );
@@ -66,7 +69,7 @@ export function openLabels(kind: 'issue' | 'pull', it: GhIssue | GhPull, net: Ne
     const empty = !!repo && !shown;
     none.classList.toggle('hidden', !empty);
     if (empty)
-      none.replaceChildren(q ? `No labels match “${filter.value.trim()}”. ` : 'This repository has no labels yet. ', h('a', { href: manage, target: '_blank', rel: 'noopener noreferrer' }, 'Make one on GitHub ↗'));
+      none.replaceChildren(q ? `No labels match “${filter.value.trim()}”. ` : 'This repository has no labels yet. ', h('a', { href: manage, target: '_blank', rel: 'noopener noreferrer' }, `Make one on ${fw.site} ↗`));
   };
   const row = (l: GhLabel) => {
     const box = h('input', { type: 'checkbox' }) as HTMLInputElement;
@@ -117,11 +120,11 @@ export function openLabels(kind: 'issue' | 'pull', it: GhIssue | GhPull, net: Ne
     if (busy || (!add.length && !remove.length)) return;
     busy = true;
     result.className = 'gh-merge-result';
-    result.replaceChildren(h('span.spinner'), 'Saving the labels on GitHub…');
+    result.replaceChildren(h('span.spinner'), `Saving the labels on ${fw.site}…`);
     sync();
     labelWaiters.set(key, (msg) => {
       settle();
-      if (!msg.labels) return fail(msg.error ?? 'GitHub did not take the labels');
+      if (!msg.labels) return fail(msg.error ?? `${fw.site} did not take the labels`);
       modal.close();
       onSaved?.(msg.labels);
     });

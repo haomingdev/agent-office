@@ -1,8 +1,10 @@
 import './changes.css';
+import { forgeWords, type ForgeWords } from '../../shared/floors';
 import { changedImageType, type ChangedFile, type ChangesState, type ServerMsg } from '../../shared/protocol';
 import type { Net } from '../net';
 import { store } from '../state';
 import { h, openModal, type Modal } from './dom';
+import { words } from './forge';
 import { confirmDialog, openPrompt } from './prompt';
 
 // The Changes window at a desk: the files a worker changed and their diff against the branch the
@@ -81,6 +83,11 @@ function renderDiff(text: string, truncated: boolean): HTMLElement {
 }
 
 /** Where one side of a changed picture loads from. The file's signature makes a new URL whenever it changes. */
+/** What a repository's floor calls things: this floor's (no `repo`), or another floor's. */
+function wordsOf(repo: string | undefined): ForgeWords {
+  return repo ? forgeWords(store.floors.find((f) => f.id === repo)?.forge) : words();
+}
+
 function imageUrl(workerId: string, repo: string | undefined, f: ChangedFile, side: 'old' | 'new'): string {
   const q = new URLSearchParams({ floor: store.floor ?? '', worker: workerId, path: f.path, side, v: f.sig, ...(repo ? { repo } : {}) });
   return `/api/changes/file?${q}`;
@@ -244,18 +251,19 @@ export function openChanges(net: Net, workerId: string, onTerminal?: () => void,
     commitBtn.textContent = uncommitted ? `✅ Commit ${uncommitted} file${uncommitted > 1 ? 's' : ''}…` : '✅ Commit…';
     prSlot.replaceChildren();
     if (!s) return;
-    if (s.pr) prSlot.append(h('a.btn.primary', { href: s.pr.url, target: '_blank', rel: 'noopener', title: 'Open on GitHub' }, `🔀 PR #${s.pr.number} ↗`));
+    const fw = wordsOf(repo);
+    if (s.pr) prSlot.append(h('a.btn.primary', { href: s.pr.url, target: '_blank', rel: 'noopener', title: `Open on ${fw.site}` }, `🔀 ${fw.pr} ${fw.ref}${s.pr.number} ↗`));
     else if (s.prBase) {
       const why = busy ? '' : uncommitted ? 'Commit first' : !s.ahead ? `Nothing on ${s.branch} that ${s.prBase} lacks yet` : '';
-      const pr = h('button.btn.primary', { type: 'button', title: why || `Push ${s.branch} and open a pull request against ${s.prBase}` }, '🔀 Open PR…');
+      const pr = h('button.btn.primary', { type: 'button', title: why || `Push ${s.branch} and open a ${fw.pullRequest} against ${s.prBase}` }, `🔀 Open ${fw.pr}…`);
       pr.disabled = busy || !!why;
       pr.addEventListener('click', () =>
         openPrompt({
-          title: '🔀 Open a pull request',
-          subtitle: `Pushes ${s.branch} to origin and opens a PR against ${s.prBase}. The first line is the title; the rest is the description.`,
+          title: `🔀 Open a ${fw.pullRequest}`,
+          subtitle: `Pushes ${s.branch} to origin and opens a ${fw.pr} against ${s.prBase}. The first line is the title; the rest is the description.`,
           initial: s.subject ?? '',
           placeholder: 'Title',
-          submitLabel: 'Open PR ↗',
+          submitLabel: `Open ${fw.pr} ↗`,
           onSubmit: (text) => {
             const [first, ...rest] = text.split('\n');
             net.send({ t: 'changes.pr', workerId, title: first.trim(), body: rest.join('\n').trim(), repo });
@@ -358,7 +366,7 @@ export function openChanges(net: Net, workerId: string, onTerminal?: () => void,
           'button.btn',
           { type: 'button', role: 'tab', class: t.id === repo ? 'on' : '', 'aria-selected': t.id === repo ? 'true' : 'false', title: t.id ? `Its worktree of ${t.name}` : `Its worktree of this floor's project, ${t.name}`, onclick: () => show(t.id) },
           `📁 ${t.name}`,
-          t.pr ? h('small', {}, ` · #${t.pr.number}`) : null,
+          t.pr ? h('small', {}, ` · ${wordsOf(t.id).ref}${t.pr.number}`) : null,
         ),
       ),
     );

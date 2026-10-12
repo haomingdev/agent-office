@@ -15,8 +15,9 @@ export interface ShelfDeps {
   /** The floor whose project it is, and the project's name. */
   floor: string;
   project?: string;
-  /** The project on GitHub, for links to files that aren't docs. */
+  /** The project on GitHub or a GitLab (`site`), for links to files that aren't docs. */
   repoUrl?: string;
+  site?: 'GitHub' | 'GitLab';
   /** You turned a page (opened a doc, or scrolled a screenful): the book in your hands turns one too. */
   onTurn(): void;
   /** Whether a page turning makes a sound (⚙️'s setting), and the 🔈 up top that turns it on or off. */
@@ -151,6 +152,9 @@ async function getJson<T>(url: string): Promise<T> {
 
 export function openBookshelf(deps: ShelfDeps) {
   const { floor, repoUrl } = deps;
+  const site = deps.site ?? 'GitHub';
+  /** Where a file of the project is on its site. */
+  const fileUrl = (p: string) => `${repoUrl}${site === 'GitLab' ? '/-' : ''}/blob/HEAD/${p.split('/').map(encodeURIComponent).join('/')}`;
   const q = (params: Record<string, string>) => new URLSearchParams({ floor, ...params }).toString();
 
   const filter = h('input', { type: 'text', placeholder: 'Filter the docs…', 'aria-label': 'Filter the docs', spellcheck: 'false', autocomplete: 'off' }) as HTMLInputElement;
@@ -289,7 +293,7 @@ export function openBookshelf(deps: ShelfDeps) {
         a.dataset.doc = to.path;
         a.dataset.hash = to.hash;
       } else if (repoUrl) {
-        a.href = `${repoUrl}/blob/HEAD/${to.path.split('/').map(encodeURIComponent).join('/')}${to.hash ? `#${to.hash}` : ''}`;
+        a.href = `${fileUrl(to.path)}${to.hash ? `#${to.hash}` : ''}`;
       } else {
         a.removeAttribute('href');
         a.title = to.path;
@@ -328,7 +332,7 @@ export function openBookshelf(deps: ShelfDeps) {
     const words = doc.text.split(/\s+/).filter(Boolean).length;
     meta.replaceChildren(
       [`${Math.max(1, Math.round(words / 220))} min read`, info ? size(info.size) : '', info ? `updated ${timeAgo(info.mtime)}` : ''].filter(Boolean).join(' · '),
-      repoUrl ? h('a', { href: `${repoUrl}/blob/HEAD/${path.split('/').map(encodeURIComponent).join('/')}`, target: '_blank', rel: 'noopener noreferrer', title: 'Open it on GitHub' }, 'GitHub ↗') : '',
+      repoUrl ? h('a', { href: fileUrl(path), target: '_blank', rel: 'noopener noreferrer', title: `Open it on ${site}` }, `${site} ↗`) : '',
     );
     turnedAt = 0;
     jump(hash);

@@ -1,4 +1,4 @@
-// Your own Claude and GitHub sign-ins (see signins.ts). Accounts only: the shared password runs on the office's.
+// Your own Claude, GitHub and GitLab sign-ins (see signins.ts). Accounts only: the shared password runs on the office's.
 import type { SignInKind, SignInsClientMsg } from '../../../shared/protocol.js';
 import type { Ctx } from '../../office/context.js';
 import type { Client } from '../../office/client.js';
@@ -11,7 +11,7 @@ const accountOf = (ctx: Ctx, c: Client): string | undefined => {
   if (!id) ctx.warn(c, "On the shared office password, workers run on the office's own sign-ins");
   return id;
 };
-const whichOf = (msg: SignInsClientMsg): SignInKind => ('which' in msg && msg.which === 'github' ? 'github' : 'claude');
+const whichOf = (msg: SignInsClientMsg): SignInKind => ('which' in msg && (msg.which === 'github' || msg.which === 'gitlab') ? msg.which : 'claude');
 
 export const signinsHandlers = {
   'signins.get'(ctx, c) {
@@ -38,7 +38,8 @@ export const signinsHandlers = {
   'signins.token'(ctx, c, msg) {
     const id = accountOf(ctx, c);
     if (!id) return;
-    void ctx.signins.token(id, whichOf(msg), str(msg.token, 4096)).then((err) => ctx.warn(c, err));
+    const host = str(msg.host, 300).trim() || undefined;
+    void ctx.signins.token(id, whichOf(msg), str(msg.token, 4096), host).then((err) => ctx.warn(c, err));
   },
   'signins.office'(ctx, c, msg) {
     const id = accountOf(ctx, c);

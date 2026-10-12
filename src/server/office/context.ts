@@ -18,6 +18,7 @@ import type { Webhook } from '../webhook.js';
 import type { Machine } from '../machine.js';
 import type { Building, FloorDef } from '../building.js';
 import type { Floor } from '../floor.js';
+import type { ForgeKind } from '../../shared/floors.js';
 import type { Sky } from '../sky.js';
 import type { Themes } from '../theme.js';
 import type { Maps } from '../maps.js';
@@ -170,8 +171,8 @@ export interface Gates {
    * are still there.
    */
   withFreshBase(c: Client, floor: Floor | Floor[], go: () => void): void;
-  /** Runs `go` with how the office acts on GitHub for `c`: as them, or as itself (no account, or an admin's choice). */
-  withGitHub(c: Client, go: (as: GhAs | undefined) => void, refused?: (why: string) => void): void;
+  /** Runs `go` with how the office acts on GitHub (or a GitLab) for `c`: as them, or as itself (no account, or an admin's choice). */
+  withForge(c: Client, forge: ForgeKind, go: (as: GhAs | undefined) => void, refused?: (why: string) => void): void;
   /** Needs a Claude sign-in of its own when the worker it starts runs Claude. */
   claudeFor(provider: string | undefined): SignInKind | undefined;
 }

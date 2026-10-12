@@ -21,12 +21,12 @@ export const floorHandlers = {
   'floor.repos'(ctx, c, msg) {
     void ctx.building.repos(msg.refresh === true).then(
       (repos) => ctx.sendTo(c, { t: 'floor.repos', repos }),
-      (err: Error) => ctx.sendTo(c, { t: 'floor.repos', repos: [], error: `Couldn't list your repositories with gh: ${err.message}` }),
+      (err: Error) => ctx.sendTo(c, { t: 'floor.repos', repos: [], error: `Couldn't list your repositories with gh or glab: ${err.message}` }),
     );
   },
   'floor.add'(ctx, c, msg) {
     const who = c.peer.name;
-    const repo = str(msg.repo, 200);
+    const repo = str(msg.repo, 300);
     void ctx.building
       .add(
         repo,

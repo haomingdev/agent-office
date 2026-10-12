@@ -7,7 +7,7 @@ import { officePrompt } from '../prompts';
 // ---- Prompts for workers ------------------------------------------------------------------------
 
 export interface BoardActions {
-  /** Start a worker on a ready-made prompt (shown for editing first). With `issue`, the worker takes that GitHub issue, which moves to In progress. */
+  /** Start a worker on a ready-made prompt (shown for editing first). With `issue`, the worker takes that issue (on GitHub or GitLab), which moves to In progress. */
   assign(prompt: string, title: string, issue?: number): void;
   /** Your own prompt about an issue or PR; `context` goes first so the worker knows which. */
   ask(context: string, title: string): void;
@@ -31,7 +31,7 @@ export function issueVars(it: Pick<GhIssue, 'number' | 'title'> & { url?: string
   return { number: it.number, title: it.title, url: it.url ?? store.issues.items.find((i) => i.number === it.number)?.url ?? '' };
 }
 
-/** owner/repo from a PR or issue URL. */
+/** owner/repo from a PR or issue URL (group/…/project for a GitLab's). */
 function nameWithOwner(url: string): string {
   return repoUrlOf(url).replace(/^https?:\/\/[^/]+\//, '');
 }
@@ -46,6 +46,8 @@ export function reviewPrompt(it: GhPull) {
 }
 
 function mergeCommand(it: GhPull, method: GhMergeMethod, deleteBranch: boolean) {
+  // A GitLab merge request: glab merges with a merge commit unless told to squash.
+  if (/\/-\/merge_requests\/\d+/.test(it.url)) return `glab mr merge ${it.number}${method === 'squash' ? ' --squash' : ''}${deleteBranch ? ' --remove-source-branch' : ''} --yes`;
   return `gh pr merge ${it.number} --${method}${deleteBranch ? ' --delete-branch' : ''} --repo ${nameWithOwner(it.url)}`;
 }
 

@@ -17,6 +17,7 @@ import { openTerminal, openTerminalFor, routeTerminalMessage } from './ui/termin
 import { openChanges, openChangesFor, routeChangesMessage } from './ui/changes';
 import { lostWorktreeDialog, openPrompt, routeWorktreeMessage, sendHomeDialog } from './ui/prompt';
 import { openBoard } from './ui/boards';
+import { prName, words } from './ui/forge';
 import type { BoardActions } from './ui/github/prompts';
 import { openPull, routePullMessage } from './ui/pull';
 import { openQueue } from './ui/queue';
@@ -157,7 +158,7 @@ function workerCard(w: WorkerInfo): HTMLElement {
     w.kind === 'agent' ? `⚙️ ${providerLabel(w.provider, store.project)}${badge ? ` · ${badge}` : ''}` : '🐚 shell',
     desk && (desk.station ? `📌 ${desk.label}` : desk.label),
     w.worktree && `🌿 ${w.worktree.branch}`,
-    w.pr && `🔀 PR #${w.pr.number}`,
+    w.pr && `🔀 ${prName(w.pr.number)}`,
     w.lastInput && `⌨️ ${w.lastInput.by} ${timeAgo(w.lastInput.at)}`,
   ].filter(Boolean);
   return h(
@@ -326,6 +327,8 @@ function renderNav() {
   const count = (id: string, n: number) => ($(id).querySelector('.n')!.textContent = n ? String(n) : '');
   count('btn-issues', store.issues.items.filter((i) => i.state === 'OPEN').length);
   count('btn-pulls', store.pulls.items.filter((p) => p.state === 'OPEN').length);
+  // Its label is the floor's: PRs on GitHub, MRs on a GitLab.
+  $('btn-pulls').firstChild!.textContent = `🔀 ${words().pr}s `;
   count('btn-queue', store.queue.tasks.filter((t) => t.status !== 'done').length);
 }
 store.on('issues', renderNav);

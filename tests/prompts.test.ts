@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PROMPTS, PROMPT_IDS, PROMPT_MAX, fillPrompt, placeholders, promptText } from '../src/shared/prompts.js';
-import { OfficePrompts, officePrompt, type PromptSource } from '../src/server/prompts.js';
+import { OfficePrompts, forgePrompts, officePrompt, type PromptSource } from '../src/server/prompts.js';
 import { stationBrief } from '../src/server/stations.js';
 import { TaskQueue, type QueueWorkers } from '../src/server/queue.js';
 import type { AgentChoice, PromptsState, WorkerInfo } from '../src/shared/protocol.js';
@@ -155,4 +155,24 @@ test('the worktree note the queue adds can be rewritten, or left off', (t) => {
   const none = queueFixture(t, undefined, '');
   none.queue.add('Fix it', 'Ada');
   assert.equal(none.workers[0].prompt, 'Fix it');
+});
+
+test('a GitLab floor gets the defaults about merge requests and glab, but a rewritten prompt as written', (t) => {
+  for (const id of PROMPT_IDS) {
+    const text = promptText({}, id, 'gitlab');
+    assert.doesNotMatch(text, /\bgh (?:pr|issue|api)\b|GitHub/, `${id} still says gh or GitHub on a GitLab floor`);
+    // The same placeholders as the GitHub default, so nothing the office fills in goes missing.
+    for (const name of placeholders(text)) assert.ok(name in PROMPTS[id].vars, `${id} uses {{${name}}}`);
+  }
+  assert.match(promptText({}, 'issue.work', 'gitlab'), /glab issue view \{\{number\}\} --comments/);
+  assert.match(promptText({}, 'pull.review', 'gitlab'), /merge request !\{\{number\}\}/);
+  assert.match(promptText({}, 'station.pulls', 'gitlab'), /glab mr diff/);
+  assert.equal(promptText({}, 'issue.work', 'github'), PROMPTS['issue.work'].text);
+
+  const book = new OfficePrompts(scratch(t), { list: ['claude'], configured: 'claude' }, () => {});
+  book.setPrompt('issue.work', 'Do #{{number}} our way', 'Ada');
+  const lab = forgePrompts(book, 'gitlab');
+  assert.equal(officePrompt(lab, 'issue.work', { number: 4 }), 'Do #4 our way');
+  assert.match(officePrompt(lab, 'issue.ask', { number: 4, title: 'T', url: 'u' }), /^This is about GitLab issue #4/);
+  assert.match(stationBrief('issues', lab), /GitLab issues with the glab CLI/);
 });

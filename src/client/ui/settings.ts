@@ -8,6 +8,7 @@ import { THEME_PICKS } from '../../shared/theme';
 import { mapChoices } from '../../shared/maps';
 import { dogSetting } from './settings-dog';
 import { h, openModal, timeAgo } from './dom';
+import { words } from './forge';
 import { agentFields, choiceLabel, officeChoice } from './provider';
 import { openPromptEditor, rewrittenPrompts } from './prompts';
 import { outsideSetting } from './settings-sky';
@@ -309,7 +310,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     agentBack.textContent = `Back to ${store.project?.agentCmd.split(' ')[0].split(/[\\/]/).pop() ?? 'the --agent'}`;
     if (!agentTouched) agent.set(now);
     agentNote.textContent =
-      'Every worker starts on this: hired at a desk, handed an issue or a pull request from the boards, taken off the queue, the board agents and meetings. Where you start one, ✏️ Edit picks another just for it.' +
+      `Every worker starts on this: hired at a desk, handed an issue or a ${words().pullRequest} from the boards, taken off the queue, the board agents and meetings. Where you start one, ✏️ Edit picks another just for it.` +
       (picked ? ` Set by ${picked.by} ${timeAgo(picked.at)}.` : ' It’s the agent the office was started with, on its own default model.') +
       (admin ? '' : ' Admins can change it.');
   };
@@ -372,7 +373,8 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
   limitClear.addEventListener('click', () => net.send({ t: 'machine.limit', limit: null }));
 
   // Whether a worker whose pull request merged goes home by itself, for everyone.
-  const leaveRow = h('div.seg', { role: 'radiogroup', 'aria-label': 'Workers whose pull request merged' });
+  const leaveTitle = `Workers whose ${words().pullRequest} merged`;
+  const leaveRow = h('div.seg', { role: 'radiogroup', 'aria-label': leaveTitle });
   const leaveNote = h('p.setting-note');
   const paintLeave = () => {
     const { on, by, at } = store.leaveOnMerge;
@@ -396,9 +398,10 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
         ),
       ),
     );
+    const { site, pullRequest } = words();
     const now = on
-      ? 'Once a worker’s pull request merges, it goes home as soon as it isn’t working or waiting on you and nobody has its terminal open, and its worktree and branch are deleted. A worktree with uncommitted changes, or commits that aren’t on GitHub, is kept.'
-      : 'A worker whose pull request merged stays at its desk, outlined in purple, until someone sends it home. Turned on, the ones already merged go too.';
+      ? `Once a worker’s ${pullRequest} merges, it goes home as soon as it isn’t working or waiting on you and nobody has its terminal open, and its worktree and branch are deleted. A worktree with uncommitted changes, or commits that aren’t on ${site}, is kept.`
+      : `A worker whose ${pullRequest} merged stays at its desk, outlined in purple, until someone sends it home. Turned on, the ones already merged go too.`;
     leaveNote.textContent = `${now} It’s the same for everyone in the building${by ? `, set by ${by}${at ? ` ${timeAgo(at)}` : ''}` : ''}.`;
   };
   paintLeave();
@@ -469,7 +472,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     workers: [
       setting('Default worker', 'office', agentNow, agent.element, agentActions, agentNote),
       setting('Worker limit', 'office', limitRow, limitNote),
-      setting('Workers whose pull request merged', 'office', leaveRow, leaveNote),
+      setting(leaveTitle, 'office', leaveRow, leaveNote),
       setting('Prompts', 'office', promptsOpen, promptsNote),
     ],
   };

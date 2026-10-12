@@ -35,16 +35,82 @@ export function floorPalette(i: number): FloorPalette {
   return FLOOR_PALETTES[((i % FLOOR_PALETTES.length) + FLOOR_PALETTES.length) % FLOOR_PALETTES.length];
 }
 
+/** Where a repository lives: GitHub, or a GitLab (gitlab.com or one of a company's own). */
+export type ForgeKind = 'github' | 'gitlab';
+
+/** A GitLab host: a domain or address, lower case. */
+const GITLAB_HOST = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+const GITLAB_SEGMENT = /^[a-zA-Z0-9_](?:[a-zA-Z0-9_.-]{0,254})$/;
+
+/**
+ * `host/group/…/project` from a GitLab URL (https, ssh or git@) or one typed that way, with or
+ * without .git; a URL may go on past the project (…/project/-/merge_requests/12). Any host but
+ * github.com counts, since a company's GitLab can be called anything.
+ */
+function normalizeGitLab(s: string): string | undefined {
+  // https://host:8443/path or ssh://git@host:2222/path; git@host:path; host/path as typed. The port
+  // is the way in, not the project's name, so the same project reached two ways is one floor.
+  const m =
+    /^(?:https?|ssh):\/\/(?:[^@/\s]+@)?([\w.-]+)(?::\d{1,5})?\/(.+)$/i.exec(s) ??
+    /^[\w.-]+@([\w.-]+):(?!\/)(.+)$/.exec(s) ??
+    /^([\w.-]+)\/(.+)$/.exec(s);
+  if (!m) return undefined;
+  const host = m[1].toLowerCase();
+  if (host === 'github.com' || !GITLAB_HOST.test(host)) return undefined;
+  const rest = m[2].replace(/\/-\/.*$/, '').replace(/[?#].*$/, '').replace(/\/+$/, '').replace(/\.git$/i, '');
+  const parts = rest.split('/');
+  if (parts.length < 2 || parts.length > 20 || !parts.every((p) => GITLAB_SEGMENT.test(p) && p !== '..' && !p.endsWith('.'))) return undefined;
+  return `${host}/${parts.join('/')}`;
+}
+
+/** Which forge a repository (as normalizeRepo gives it) is on: a GitHub owner never has a dot, a GitLab host always does. */
+export function repoForge(repo: string | undefined): ForgeKind | undefined {
+  if (!repo) return undefined;
+  return repo.split('/')[0].includes('.') ? 'gitlab' : 'github';
+}
+
+/** What the office calls things on a forge: a GitLab has merge requests (!12) where GitHub has pull requests (#12). */
+export interface ForgeWords {
+  site: 'GitHub' | 'GitLab';
+  /** "PR" or "MR". */
+  pr: string;
+  /** "pull request" or "merge request". */
+  pullRequest: string;
+  /** What comes before a pull request's number: # or !. */
+  ref: string;
+  /** Its command line tool. */
+  cli: 'gh' | 'glab';
+}
+
+const WORDS: Record<ForgeKind, ForgeWords> = {
+  github: { site: 'GitHub', pr: 'PR', pullRequest: 'pull request', ref: '#', cli: 'gh' },
+  gitlab: { site: 'GitLab', pr: 'MR', pullRequest: 'merge request', ref: '!', cli: 'glab' },
+};
+
+/** GitHub's words when it isn't known. */
+export function forgeWords(kind: ForgeKind | undefined): ForgeWords {
+  return WORDS[kind ?? 'github'];
+}
+
+/** A GitLab repository's host and its project's path ("gitlab.example.com", "group/sub/project"). */
+export function gitlabProject(repo: string | undefined): { host: string; path: string } | undefined {
+  if (repoForge(repo) !== 'gitlab') return undefined;
+  const at = repo!.indexOf('/');
+  return { host: repo!.slice(0, at), path: repo!.slice(at + 1) };
+}
+
 /**
  * `owner/repo` from what someone typed or pasted: owner/repo, a github.com URL (https, ssh or
- * git@), with or without .git. Undefined for anything else, so it can never become a CLI option,
- * a path or another host.
+ * git@), with or without .git. A GitLab project comes back as `host/group/…/project` (see
+ * normalizeGitLab). Undefined for anything else, so it can never become a CLI option or a path.
  */
 export function normalizeRepo(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   let s = value.trim();
-  if (s.length > 200) return undefined;
-  s = s.replace(/^(?:https?:\/\/|ssh:\/\/)?(?:[\w.-]+@)?github\.com[/:]/i, '');
+  if (s.length > 300) return undefined;
+  // A host with a dot that isn't github.com: a GitLab.
+  if (!/^(?:https?:\/\/|ssh:\/\/)?(?:[^@/\s]+@)?github\.com[/:]/i.test(s) && /^(?:(?:https?|ssh):\/\/)?(?:[^@/\s]+@)?[\w-]+\.[\w.-]+(?::\d+)?[/:]/i.test(s)) return normalizeGitLab(s);
+  s = s.replace(/^(?:https?:\/\/|ssh:\/\/)?(?:[^@/\s]+@)?github\.com[/:]/i, '');
   s = s.replace(/[?#].*$/, '').replace(/\/+$/, '').replace(/\.git$/i, '');
   const parts = s.split('/');
   // A URL may go on past the repository (…/owner/repo/issues/12).

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import tty from 'node:tty';
 import { normalizeRepo, sameRepo } from '../shared/floors.js';
+import { gitlabHosts } from './gitlab/repos.js';
 import type { RepoChoice } from '../shared/protocol.js';
 import { Building, tildify } from './building.js';
 import { officeHome, type Config } from './config.js';
@@ -144,12 +145,12 @@ export async function setupCommand(argv: string[]): Promise<number> {
   return 0;
 }
 
-/** The questions: the workspace folder (when `askFolder`), GitHub, then repositories to add. */
+/** The questions: the workspace folder (when `askFolder`), GitHub (or a GitLab glab is signed in to), then repositories to add. */
 async function walkthrough(building: Building, dataDir: string, askFolder: boolean) {
   if (askFolder) await pickFolder(building);
-  const login = await githubLogin(dataDir);
+  const login = (await githubLogin(dataDir)) ?? (await gitlabLogin(dataDir));
   if (!login) {
-    console.log('\n  Add projects from the elevator in the office once gh is ready (or run `agent-office setup` again).');
+    console.log('\n  Add projects from the elevator in the office once gh (or glab) is ready (or run `agent-office setup` again).');
     return;
   }
   await pickProjects(building, login);
@@ -210,6 +211,14 @@ async function githubLogin(cwd: string): Promise<string | undefined> {
   }
 }
 
+/** Someone to add floors as when glab is signed in to a GitLab, which the office clones from too. */
+async function gitlabLogin(cwd: string): Promise<string | undefined> {
+  const hosts = await gitlabHosts(cwd);
+  if (!hosts.length) return undefined;
+  console.log(`\n  🦊 glab is signed in to ${hosts.join(', ')}: its projects can be floors too`);
+  return whoAmI();
+}
+
 function ghUser(cwd: string): Promise<{ login?: string; missing?: boolean; signedOut?: boolean; error?: string }> {
   return new Promise((resolve) => {
     execFile('gh', ['api', 'user', '--jq', '.login'], { cwd, timeout: 30_000 }, (err, stdout, stderr) => {
@@ -222,7 +231,7 @@ function ghUser(cwd: string): Promise<{ login?: string; missing?: boolean; signe
 }
 
 async function pickProjects(building: Building, login: string) {
-  process.stdout.write('     Asking GitHub for your repositories…');
+  process.stdout.write('     Asking GitHub and GitLab for your repositories…');
   let repos: RepoChoice[] = [];
   try {
     repos = await building.repos();
@@ -235,7 +244,7 @@ async function pickProjects(building: Building, login: string) {
   if (shown.length) {
     console.log(`\n  🛗 Your repositories, most recently pushed first${repos.length > SHOWN ? ` (${SHOWN} of ${repos.length}; type a word to search)` : ''}:\n`);
     printRepos(shown, building);
-  } else if (!repos.length) console.log('\n  🛗 No repositories to list. Type owner/name to clone any repository you can see.');
+  } else if (!repos.length) console.log('\n  🛗 No repositories to list. Type owner/name (or host/group/project for a GitLab) to clone any repository you can see.');
   let added = 0;
   for (;;) {
     const answer = await ask(

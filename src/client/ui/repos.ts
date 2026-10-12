@@ -1,8 +1,10 @@
 import './repos.css';
 import type { WorkerInfo } from '../../shared/protocol';
+import { forgeWords } from '../../shared/floors';
 import { isBusy } from '../../shared/status';
 import { store } from '../state';
 import { h, openModal } from './dom';
+import { words } from './forge';
 
 // A worker across repositories (see WorkerInfo.repos): one task in worktrees of several floors'
 // projects, all on the same branch, with a pull request in each repository it commits to.
@@ -31,26 +33,29 @@ export function openRepoPulls(workerId: string, actions: RepoPullsActions) {
   const note = h('p', { style: 'margin:0 0 12px;font-weight:700' });
   const list = h('ul.repo-pulls');
   const close = h('button.btn', { type: 'button' }, 'Close');
-  const missing = h('button.btn.primary', { type: 'button' }, '🔀 Open the missing PRs');
-  const el = h('div.modal', { role: 'dialog', 'aria-label': 'Pull requests' }, h('header', {}, title), h('div.body', {}, note, list), h('footer', {}, h('span.grow'), close, missing));
+  const missing = h('button.btn.primary', { type: 'button' });
+  const el = h('div.modal', { role: 'dialog', 'aria-label': `${cap(words().pullRequest)}s` }, h('header', {}, title), h('div.body', {}, note, list), h('footer', {}, h('span.grow'), close, missing));
 
   const render = () => {
     const w = store.workers.get(workerId);
     if (!w?.worktree) return modal.close();
     const repos = workerRepos(w);
-    title.textContent = `🔀 ${w.name}'s pull requests`;
-    note.textContent = `One change across ${repos.length} repositories, each on 🌿 ${w.worktree.branch}. Each repository it commits to gets a pull request of its own, and each one lists the others.`;
+    const fw = words();
+    title.textContent = `🔀 ${w.name}'s ${fw.pullRequest}s`;
+    note.textContent = `One change across ${repos.length} repositories, each on 🌿 ${w.worktree.branch}. Each repository it commits to gets a ${fw.pullRequest} of its own, and each one lists the others.`;
     list.replaceChildren(
       ...repos.map((r) => {
-        const floor = r.floor ? store.floors.find((f) => f.id === r.floor)?.name : store.currentFloor()?.name;
+        const at = r.floor ? store.floors.find((f) => f.id === r.floor) : store.currentFloor();
+        const floor = at?.name;
+        const rw = forgeWords(at?.forge);
         const pr = r.pr;
         return h(
           'li',
           {},
           h('span.name', {}, `📁 ${r.name}`, h('small', {}, floor ? `${floor} floor${r.floor ? '' : ' · this one'}` : 'no longer in the building')),
           pr
-            ? h('button.btn', { type: 'button', title: r.floor ? 'Open it on GitHub' : 'Open it', onclick: () => (r.floor ? window.open(pr.url, '_blank', 'noopener') : (modal.close(), actions.openPull(pr.number, pr.url))) }, `🔀 #${pr.number}${r.floor ? ' ↗' : ''}`)
-            : h('span.none', {}, 'No PR yet'),
+            ? h('button.btn', { type: 'button', title: r.floor ? `Open it on ${rw.site}` : 'Open it', onclick: () => (r.floor ? window.open(pr.url, '_blank', 'noopener') : (modal.close(), actions.openPull(pr.number, pr.url))) }, `🔀 ${rw.ref}${pr.number}${r.floor ? ' ↗' : ''}`)
+            : h('span.none', {}, `No ${rw.pr} yet`),
           h('button.btn', { type: 'button', title: `What ${w.name} changed in ${r.name}`, onclick: () => (modal.close(), actions.changes(r.floor)) }, '🌿 Changes'),
         );
       }),
@@ -58,14 +63,16 @@ export function openRepoPulls(workerId: string, actions: RepoPullsActions) {
     const busy = isBusy(w.status);
     missing.classList.toggle('hidden', repos.every((r) => r.pr));
     missing.disabled = !!w.prOpening || busy;
-    missing.textContent = w.prOpening ? '⏳ Opening…' : '🔀 Open the missing PRs';
-    missing.title = busy ? `${w.name} is still at it — wait until it's done` : 'Pushes the branch in each repository with commits and no pull request yet, and opens one there';
+    missing.textContent = w.prOpening ? '⏳ Opening…' : `🔀 Open the missing ${fw.pr}s`;
+    missing.title = busy ? `${w.name} is still at it — wait until it's done` : `Pushes the branch in each repository with commits and no ${fw.pullRequest} yet, and opens one there`;
   };
 
   const unsub = store.on('workers', () => render());
-  const modal = openModal(el, { doing: '🔀 looking over pull requests', onClose: () => unsub() });
+  const modal = openModal(el, { doing: `🔀 looking over ${words().pullRequest}s`, onClose: () => unsub() });
   close.addEventListener('click', () => modal.close());
   missing.addEventListener('click', () => actions.openMissing());
   render();
   setTimeout(() => close.focus(), 30);
 }
+
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);

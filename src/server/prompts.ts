@@ -3,10 +3,11 @@ import path from 'node:path';
 import { isAgentEffort, isAgentProvider, type AgentChoice, type AgentProvider, type PromptsState } from '../shared/protocol.js';
 import { PROMPTS, PROMPT_MAX, fillPrompt, isPromptId, promptText, type PromptId, type PromptVars } from '../shared/prompts.js';
 import { validateWorkerEffort, validateWorkerModel } from './agents.js';
+import type { ForgeKind } from '../shared/floors.js';
 
-/** What the floors read: a prompt as the office has it now, and what workers start on. */
+/** What the floors read: a prompt as the office has it now (GitLab's default on a GitLab floor), and what workers start on. */
 export interface PromptSource {
-  text(id: PromptId): string;
+  text(id: PromptId, forge?: ForgeKind): string;
   /** The worker picked in ⚙️ Settings, when one was. */
   agent(): AgentChoice | undefined;
 }
@@ -14,6 +15,11 @@ export interface PromptSource {
 /** A prompt's text, from `source` when there is one, else the default. */
 export function officePrompt(source: PromptSource | undefined, id: PromptId, vars: PromptVars = {}): string {
   return fillPrompt(source ? source.text(id) : PROMPTS[id].text, vars);
+}
+
+/** `source` as a floor on `forge` reads it: GitLab's defaults where they differ. */
+export function forgePrompts(source: PromptSource, forge: ForgeKind): PromptSource {
+  return { text: (id) => source.text(id, forge), agent: () => source.agent() };
 }
 
 /**
@@ -39,8 +45,8 @@ export class OfficePrompts implements PromptSource {
     return { custom: { ...this.saved.custom }, ...(this.saved.agent ? { agent: { ...this.saved.agent } } : {}) };
   }
 
-  text(id: PromptId): string {
-    return promptText(this.saved.custom, id);
+  text(id: PromptId, forge?: ForgeKind): string {
+    return promptText(this.saved.custom, id, forge);
   }
 
   agent(): AgentChoice | undefined {

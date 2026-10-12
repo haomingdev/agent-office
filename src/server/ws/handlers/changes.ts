@@ -45,7 +45,9 @@ export const changesHandlers = {
   'changes.pr'(ctx, c, msg) {
     const who = c.peer.name;
     const w = workerOf(ctx, msg.workerId);
-    if (w) ctx.withGitHub(c, (as) => void w.floor.changes.pullRequest(w.wid, str(msg.title, 300), str(msg.body, 20000), who, as?.env, repoOf(msg.repo)).then((err) => ctx.warn(c, err)));
+    // On the floor of the repository it's for: a worker across repositories opens one in another floor's.
+    const forge = w && ((msg.repo && ctx.floors.get(String(msg.repo))?.forge.kind) || w.floor.forge.kind);
+    if (w && forge) ctx.withForge(c, forge, (as) => void w.floor.changes.pullRequest(w.wid, str(msg.title, 300), str(msg.body, 20000), who, as?.env, repoOf(msg.repo)).then((err) => ctx.warn(c, err)));
   },
 } satisfies HandlerMap<ChangesClientMsg>;
 

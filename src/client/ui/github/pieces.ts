@@ -1,6 +1,7 @@
 import type { GhComment } from '../../../shared/protocol';
 import { AVATAR_COLORS } from '../../state';
 import { h, timeAgo } from '../dom';
+import { words } from '../forge';
 import { markdown } from '../markdown';
 
 // ---- Small pieces ---------------------------------------------------------------------------------
@@ -42,7 +43,7 @@ export function spinnerRow(text: string) {
 }
 
 export function errorBox(text: string, retry?: () => void) {
-  return h('div.gh-error', {}, `Couldn't load from GitHub: ${text}`, retry ? h('button.btn', { type: 'button', onclick: retry }, 'Try again') : null);
+  return h('div.gh-error', {}, `Couldn't load from ${words().site}: ${text}`, retry ? h('button.btn', { type: 'button', onclick: retry }, 'Try again') : null);
 }
 
 export function stateOf(it: { state: string; isDraft?: boolean }): [string, string] {

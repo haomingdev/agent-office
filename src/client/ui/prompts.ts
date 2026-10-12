@@ -4,9 +4,12 @@ import { store } from '../state';
 import { PROMPTS, PROMPT_GROUPS, PROMPT_IDS, PROMPT_MAX, fillPrompt, placeholders, promptText, type PromptGroup, type PromptId, type PromptVars } from '../../shared/prompts';
 import { h, openModal, timeAgo } from './dom';
 
-/** One of the office's prompts, as it has it now (rewritten in ⚙️ Settings, or the default), filled in. */
+/**
+ * One of the office's prompts, as it has it now (rewritten in ⚙️ Settings, or the default, which is
+ * GitLab's on a GitLab floor), filled in.
+ */
 export function officePrompt(id: PromptId, vars: PromptVars = {}): string {
-  return fillPrompt(promptText(store.prompts.custom, id), vars);
+  return fillPrompt(promptText(store.prompts.custom, id, store.currentFloor()?.forge), vars);
 }
 
 /** How many of the office's prompts someone rewrote. */

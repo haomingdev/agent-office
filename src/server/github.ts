@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import type { GhCheck, GhCloseReason, GhComment, GhIssue, GhIssueDetail, GhLabel, GhMergeMethod, GhPull, GhPullDetail, GhRepoInfo, GhReviewComment, GhState } from '../shared/protocol.js';
+import type { Forge } from './forge.js';
 import type { GhAs } from './signins.js';
 
 const REFRESH_MS = 90_000;
@@ -162,7 +163,8 @@ export class Claims {
   }
 }
 
-export class GitHub {
+export class GitHub implements Forge {
+  readonly kind = 'github' as const;
   issues: GhState<GhIssue> = { items: [], fetchedAt: 0, loading: false };
   pulls: GhState<GhPull> = { items: [], fetchedAt: 0, loading: false };
   private timer?: NodeJS.Timeout;

@@ -183,10 +183,13 @@ export function readPrRequest(body: unknown): PrRequest | string {
   const who = typeof b.worker === 'string' ? { worker: b.worker.trim() } : {};
   if (b.unlink === true) return b.pr === undefined ? who : 'Give pr or unlink: true, not both';
   const text = typeof b.pr === 'string' ? b.pr.trim() : '';
-  const url = /^https?:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)(?:[/?#].*)?$/i.exec(text);
-  const n = typeof b.pr === 'number' ? b.pr : url ? Number(url[2]) : /^#?\d+$/.test(text) ? Number(text.replace('#', '')) : NaN;
+  // A pull request's page on GitHub, or a merge request's on a GitLab (…/project/-/merge_requests/12).
+  const hub = /^https?:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)(?:[/?#].*)?$/i.exec(text);
+  const lab = hub ? null : /^https?:\/\/([\w.-]+)(?::\d+)?\/([\w./-]+?)\/-\/merge_requests\/(\d+)(?:[/?#].*)?$/i.exec(text);
+  const n = typeof b.pr === 'number' ? b.pr : hub ? Number(hub[2]) : lab ? Number(lab[3]) : /^[#!]?\d+$/.test(text) ? Number(text.replace(/^[#!]/, '')) : NaN;
   if (!Number.isSafeInteger(n) || n < 1) return "Say which pull request: pr, its number or its URL (or unlink: true to take the worker's off)";
-  return { ...who, pr: n, ...(url ? { repo: url[1] } : {}) };
+  const repo = hub ? hub[1] : lab ? `${lab[1].toLowerCase()}/${lab[2]}` : undefined;
+  return { ...who, pr: n, ...(repo ? { repo } : {}) };
 }
 
 // --- The MCP server -------------------------------------------------------------------------------

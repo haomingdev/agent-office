@@ -3,6 +3,7 @@ import type { GhIssue, GhLabel, GhPull, WorkerInfo } from '../../shared/protocol
 import type { Net } from '../net';
 import { store, workerForPull } from '../state';
 import { h, openModal, timeAgo } from './dom';
+import { prName, words } from './forge';
 import { openIssue } from './github/issue-window';
 import { labelChip, openLabels } from './github/labels';
 import { inProgress } from './github/progress';
@@ -25,8 +26,9 @@ interface Column<T> {
 const byUpdated = (a: { updatedAt: string }, b: { updatedAt: string }) => b.updatedAt.localeCompare(a.updatedAt);
 
 function githubErrorHint(error: string): string {
-  if (/^Unknown JSON field:/i.test(error)) return 'The server is running an older GitHub CLI than this feature expected; update `gh` if the board still cannot load.';
-  return 'The server runs `gh` in the project directory — make sure it is installed and authenticated (gh auth login).';
+  const { site, cli } = words();
+  if (/^Unknown JSON field:/i.test(error)) return `The server is running an older ${site} CLI than this feature expected; update \`${cli}\` if the board still cannot load.`;
+  return `The server runs \`${cli}\` in the project directory — make sure it is installed and authenticated (${cli} auth login).`;
 }
 
 function issueColumns(items: GhIssue[]): Column<GhIssue>[] {
@@ -113,10 +115,11 @@ function queueChip(issue: number): Node | '' {
     if (w) return workerChip(w, `${w.name} is working on this at ${store.plan().byId.get(w.deskId)?.label ?? 'a desk'} · ${provider}`);
     return h('span.qchip.running', {}, `🤖 ${t.workerName ?? 'a worker'} · ${provider}`);
   }
-  return t.pr ? h('span.qchip.done', {}, `🔀 PR #${t.pr.number} · ${provider}`) : '';
+  return t.pr ? h('span.qchip.done', {}, `🔀 ${prName(t.pr.number)} · ${provider}`) : '';
 }
 
-function card(n: number, title: string, meta: (Node | string)[], i: number, onclick: () => void, onLabels: () => void) {
+/** `ref` is what comes before the number: # for an issue, the floor's for a pull request (# or !). */
+function card(n: number, title: string, meta: (Node | string)[], i: number, onclick: () => void, onLabels: () => void, ref = '#') {
   return h(
     'li.card',
     {
@@ -125,8 +128,8 @@ function card(n: number, title: string, meta: (Node | string)[], i: number, oncl
       onclick,
       onkeydown: ((e: KeyboardEvent) => e.key === 'Enter' && e.target === e.currentTarget && onclick()) as EventListener,
     },
-    h('button.card-labels', { type: 'button', title: 'Change the labels', 'aria-label': `Change the labels on #${n}`, onclick: ((e: Event) => (e.stopPropagation(), onLabels())) as EventListener }, '🏷️'),
-    h('div.num', {}, `#${n}`),
+    h('button.card-labels', { type: 'button', title: 'Change the labels', 'aria-label': `Change the labels on ${ref}${n}`, onclick: ((e: Event) => (e.stopPropagation(), onLabels())) as EventListener }, '🏷️'),
+    h('div.num', {}, `${ref}${n}`),
     h('div.ttl', {}, title),
     h('div.meta', {}, ...meta.filter((m) => m !== '').map((m) => (typeof m === 'string' ? h('span', {}, m) : m))),
   );
@@ -135,9 +138,11 @@ function card(n: number, title: string, meta: (Node | string)[], i: number, oncl
 export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActions) {
   const body = h('div.body');
   const status = h('span.board-status');
-  const refresh = h('button.btn', { title: 'Refresh from GitHub', onclick: () => net.send({ t: 'gh.refresh' }) }, '🔄 Refresh');
+  const fw = words();
+  const pulls = fw.site === 'GitLab' ? 'Merge Requests' : 'Pull Requests';
+  const refresh = h('button.btn', { title: `Refresh from ${fw.site}`, onclick: () => net.send({ t: 'gh.refresh' }) }, '🔄 Refresh');
   const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
-  const el = h('div.modal.board', { role: 'dialog', 'aria-label': kind === 'issues' ? 'Issues board' : 'Pull requests board' }, h('header', {}, h('h2', {}, kind === 'issues' ? '📌 Issues' : '🔀 Pull Requests'), status, refresh, close), body);
+  const el = h('div.modal.board', { role: 'dialog', 'aria-label': kind === 'issues' ? 'Issues board' : `${fw.pullRequest[0].toUpperCase()}${fw.pullRequest.slice(1)}s board` }, h('header', {}, h('h2', {}, kind === 'issues' ? '📌 Issues' : `🔀 ${pulls}`), status, refresh, close), body);
 
   const filters = loadFilters(kind);
   /** What each column's filter box holds (column key → text), for as long as the board is open. */
@@ -256,7 +261,7 @@ export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActi
     const caret = active instanceof HTMLInputElement ? ([active.selectionStart, active.selectionEnd] as const) : null;
     body.replaceChildren();
     if (st.error && !st.items.length) {
-      body.append(h('div.board-error', {}, `Couldn't load from GitHub: ${st.error}`, h('br'), h('small', {}, githubErrorHint(st.error))));
+      body.append(h('div.board-error', {}, `Couldn't load from ${words().site}: ${st.error}`, h('br'), h('small', {}, githubErrorHint(st.error))));
       return;
     }
     const all = boardLabels(st.items);
@@ -289,6 +294,7 @@ export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActi
               i,
               () => openPull(it, net, actions),
               () => openLabels('pull', it, net),
+              words().ref,
             );
           }),
         );
@@ -310,7 +316,7 @@ export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActi
     status.textContent = st.loading ? 'Refreshing…' : st.fetchedAt ? `Updated ${timeAgo(st.fetchedAt)}` : '';
   }, 15000);
   const modal = openModal(el, {
-    doing: kind === 'issues' ? '📋 at the issues board' : '🔀 at the PR board',
+    doing: kind === 'issues' ? '📋 at the issues board' : `🔀 at the ${fw.pr} board`,
     onClose: () => {
       unsubs.forEach((u) => u());
       clearInterval(timer);

@@ -4,6 +4,7 @@ import { fmtTokens, type Meeting, type MeetingPattern, type MeetingTurn } from '
 import type { Net } from '../net';
 import { store } from '../state';
 import { h, openModal, timeAgo, toast, STATUS_LABEL, type Modal } from './dom';
+import { prName, words } from './forge';
 import { confirmDialog } from './prompt';
 import { providerPicker } from './provider';
 import { officePrompt } from './prompts';
@@ -97,7 +98,7 @@ function renderStatus(m: Meeting, body: HTMLElement, foot: HTMLElement, net: Net
     }),
   );
   const where = m.worktree ? h('span', {}, '🌿 ', h('code', {}, m.worktree.branch), m.commit ? ` · committed ${m.commit}` : '') : null;
-  const review = m.review?.url ? h('a', { href: m.review.url, target: '_blank', rel: 'noopener noreferrer' }, `🔍 The review on PR #${m.pr} ↗`) : m.review?.error ? h('span.bad', {}, `Couldn't post the review: ${m.review.error}`) : null;
+  const review = m.review?.url ? h('a', { href: m.review.url, target: '_blank', rel: 'noopener noreferrer' }, `🔍 The review on ${m.pr ? prName(m.pr) : words().pr} ↗`) : m.review?.error ? h('span.bad', {}, `Couldn't post the review: ${m.review.error}`) : null;
   body.replaceChildren(
     ...present(
     h('div.meeting-head', {}, pill, h('b', {}, `${p.icon} ${p.label}`), h('span.meeting-title', { title: m.prompt }, m.title)),
@@ -115,7 +116,7 @@ function renderStatus(m: Meeting, body: HTMLElement, foot: HTMLElement, net: Net
     ...present(
     h('span.grow', {}, running ? 'The workers stay at the table after it ends, so you can read their terminals.' : 'Clearing the room sends the workers home. A committed output stays on its branch.'),
     running ? h('button.btn', { type: 'button', onclick: () => confirmDialog('Stop the meeting?', `The workers stop where they are and stay at the table. ${m.output} is only there if it was written.`, 'Stop it', () => net.send({ t: 'meeting.stop' })) }, '⛔ Stop meeting') : null,
-    !running && m.commit && head?.worktree ? h('button.btn', { type: 'button', title: `Push ${m.worktree?.branch} and open a pull request`, onclick: () => actions.openPr(head.id) }, head.pr ? `🔀 PR #${head.pr.number}` : '🔀 Open PR') : null,
+    !running && m.commit && head?.worktree ? h('button.btn', { type: 'button', title: `Push ${m.worktree?.branch} and open a ${words().pullRequest}`, onclick: () => actions.openPr(head.id) }, head.pr ? `🔀 ${prName(head.pr.number)}` : `🔀 Open ${words().pr}`) : null,
     !running ? h('button.btn', { type: 'button', onclick: () => net.send({ t: 'meeting.clear' }) }, '🧹 Clear the room') : null,
     !running ? h('button.btn.primary', { type: 'button', onclick: callAnother }, '🤝 Call a meeting…') : null,
     ),
@@ -136,8 +137,10 @@ function meetingForm(net: Net, preset: MeetingPreset | undefined, done: () => vo
   titleIn.value = preset?.title ?? '';
   const outputIn = h('input', { type: 'text', 'aria-label': 'Output file', spellcheck: 'false' }) as HTMLInputElement;
   const outputNote = h('small.muted');
-  const prSel = h('select.provider-select', { 'aria-label': 'Pull request' }) as HTMLSelectElement;
-  const prRow = h('div.meeting-field', {}, h('label', {}, 'Pull request'), prSel);
+  const fw = words();
+  const prLabel = `${fw.pullRequest[0].toUpperCase()}${fw.pullRequest.slice(1)}`;
+  const prSel = h('select.provider-select', { 'aria-label': prLabel }) as HTMLSelectElement;
+  const prRow = h('div.meeting-field', {}, h('label', {}, prLabel), prSel);
   const partsIn = h('textarea', { rows: 3, placeholder: 'src/server/\nsrc/client/\nsrc/shared/', 'aria-label': 'Parts', spellcheck: 'false' }) as HTMLTextAreaElement;
   const partsRow = h('div.meeting-field', {}, h('label', {}, 'Parts, one per line'), partsIn, h('small.muted', {}, 'Handed out to the mappers in turn: files, folders, modules or issues.'));
   const count = h('b');
@@ -159,7 +162,7 @@ function meetingForm(net: Net, preset: MeetingPreset | undefined, done: () => vo
   const syncOutput = () => {
     if (!outputTouched) outputIn.value = def().output(slug(), pr());
     const problem = outputProblem(outputIn.value.trim());
-    outputNote.textContent = problem ? `⚠️ ${problem}` : pattern === 'review' ? 'It ends when this file is written; the office then posts it on the PR as one review.' : store.project?.branch ? 'It ends when this file is written; the office commits it on the meeting’s own branch.' : 'It ends when this file is written.';
+    outputNote.textContent = problem ? `⚠️ ${problem}` : pattern === 'review' ? `It ends when this file is written; the office then posts it on the ${fw.pr} as one review.` : store.project?.branch ? 'It ends when this file is written; the office commits it on the meeting’s own branch.' : 'It ends when this file is written.';
     outputNote.classList.toggle('bad', !!problem);
   };
   const renderRoles = () => {
@@ -275,12 +278,12 @@ function meetingForm(net: Net, preset: MeetingPreset | undefined, done: () => vo
   const refresh = () => {
     const open = store.pulls.items.filter((p) => p.state === 'OPEN');
     const want = prSel.value || (preset?.pr ? String(preset.pr) : '');
-    const opts: (readonly [string, string])[] = open.map((p) => [String(p.number), `#${p.number} ${p.title}`] as const);
-    if (preset?.pr && !open.some((p) => p.number === preset.pr)) opts.unshift([String(preset.pr), `#${preset.pr}`]);
+    const opts: (readonly [string, string])[] = open.map((p) => [String(p.number), `${fw.ref}${p.number} ${p.title}`] as const);
+    if (preset?.pr && !open.some((p) => p.number === preset.pr)) opts.unshift([String(preset.pr), `${fw.ref}${preset.pr}`]);
     const key = JSON.stringify(opts);
     if (prSel.dataset.key !== key) {
       prSel.dataset.key = key;
-      prSel.replaceChildren(h('option', { value: '' }, open.length || preset?.pr ? 'Pick a pull request…' : 'No open pull requests'), ...opts.map(([v, label]) => h('option', { value: v }, label.length > 70 ? `${label.slice(0, 69)}…` : label)));
+      prSel.replaceChildren(h('option', { value: '' }, open.length || preset?.pr ? `Pick a ${fw.pullRequest}…` : `No open ${fw.pullRequest}s`), ...opts.map(([v, label]) => h('option', { value: v }, label.length > 70 ? `${label.slice(0, 69)}…` : label)));
       prSel.value = want;
       syncOutput();
     }

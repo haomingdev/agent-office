@@ -253,12 +253,20 @@ test('a worker in the main checkout has the pull request it opened itself', () =
   assert.equal(ownPr('grep -rn "gh pr create" docs', `docs/a.md: gh pr create … ${url}`), undefined);
   assert.equal(ownPr('gh pr create --fill', 'pull request create failed: GraphQL: No commits between main and fix-it'), undefined);
   assert.equal(ownPr(undefined, url), undefined);
+
+  // `glab mr create` on a GitLab prints the merge request's page; its project can be in a subgroup.
+  const mr = 'https://gitlab.example.com/acme/web/app/-/merge_requests/7';
+  assert.deepEqual(ownPr('glab mr create --fill --yes', `Creating merge request for fix-it into main in acme/web/app\n\n!7 Fix it (fix-it)\n ${mr}\n`), { repo: 'gitlab.example.com/acme/web/app', number: 7, url: mr });
+  assert.equal(ownPr('glab mr view 7', mr), undefined);
 });
 
 test('reads a request to say which pull request is whose', () => {
   assert.deepEqual(readPrRequest({ pr: 12 }), { pr: 12 });
   assert.deepEqual(readPrRequest({ pr: ' #12 ', worker: ' Bolt ' }), { worker: 'Bolt', pr: 12 });
   assert.deepEqual(readPrRequest({ pr: 'https://github.com/acme/app/pull/12/files', worker: 'Bolt' }), { worker: 'Bolt', pr: 12, repo: 'acme/app' });
+  // A merge request on a GitLab: its page, or !12.
+  assert.deepEqual(readPrRequest({ pr: 'https://GitLab.example.com/acme/web/app/-/merge_requests/12/diffs' }), { pr: 12, repo: 'gitlab.example.com/acme/web/app' });
+  assert.deepEqual(readPrRequest({ pr: '!12' }), { pr: 12 });
   assert.deepEqual(readPrRequest({ unlink: true, worker: 'Bolt' }), { worker: 'Bolt' });
   assert.deepEqual(readPrRequest({ unlink: true }), {});
   assert.match(readPrRequest({}) as string, /Say which pull request/);

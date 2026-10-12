@@ -1,5 +1,6 @@
 // Workers at their desks and the board agents at their kiosks: hiring them, their terminals, their
 // worktrees and pull requests.
+import { forgeWords } from '../../../shared/floors.js';
 import { MAX_REPOS, type RepoSource } from '../../workers.js';
 import { OPEN_CODE_MODEL_MAX } from '../../../shared/providers.js';
 import { isAgentEffort, isAgentProvider, type WorkerClientMsg } from '../../../shared/protocol.js';
@@ -142,27 +143,28 @@ export const workerHandlers = {
     const w = workerOf(ctx, msg.workerId);
     if (!w) return;
     const { floor, wid } = w;
-    ctx.withGitHub(c, (as) => void floor.workers.openPr(wid, who, as).then((r) => {
+    ctx.withForge(c, floor.forge.kind, (as) => void floor.workers.openPr(wid, who, as).then((r) => {
       if (typeof r === 'string') return ctx.warn(c, r);
       const info = floor.workers.get(wid);
       const name = info?.name ?? 'the worker';
       const [one] = r.prs;
-      if (r.prs.length === 1 && !one.repo) ctx.toastFloor(floor, one.existed ? `${name}'s branch already has PR #${one.number}` : `${who} opened PR #${one.number} for ${name}`);
+      const words = forgeWords(floor.forge.kind);
+      if (r.prs.length === 1 && !one.repo) ctx.toastFloor(floor, one.existed ? `${name}'s branch already has ${words.pr} ${words.ref}${one.number}` : `${who} opened ${words.pr} ${words.ref}${one.number} for ${name}`);
       else {
-        // Across repositories: one line for them all.
-        const list = r.prs.map((p) => `${p.repo} #${p.number}`).join(', ');
-        ctx.toastFloor(floor, r.prs.every((p) => p.existed) ? `${name}'s pull requests are already open: ${list}` : `${who} opened ${name}'s pull requests: ${list}`);
+        // Across repositories: one line for them all (each repository's own # or !).
+        const list = r.prs.map((p) => `${p.repo} ${/\/-\/merge_requests\//.test(p.url) ? '!' : '#'}${p.number}`).join(', ');
+        ctx.toastFloor(floor, r.prs.every((p) => p.existed) ? `${name}'s ${words.pullRequest}s are already open: ${list}` : `${who} opened ${name}'s ${words.pullRequest}s: ${list}`);
       }
       const dirty = r.prs.filter((p) => p.dirty);
-      if (dirty.length) ctx.warn(c, `${name} still has uncommitted changes in ${dirty.some((p) => p.repo) ? `its worktree${dirty.length > 1 ? 's' : ''} of ${dirty.map((p) => p.repo).join(', ')}` : 'its worktree'} — they are not in the PR`);
+      if (dirty.length) ctx.warn(c, `${name} still has uncommitted changes in ${dirty.some((p) => p.repo) ? `its worktree${dirty.length > 1 ? 's' : ''} of ${dirty.map((p) => p.repo).join(', ')}` : 'its worktree'} — they are not in the ${words.pr}`);
       for (const f of r.failed) ctx.warn(c, f);
       // Put it on the board now rather than at the next poll. A refresh already in flight
       // returns at once and can miss it, so look again shortly after.
       const own = r.prs.find((p) => !p.repo || p.repo === info?.worktree?.path.split(/[\\/]/).pop());
-      void floor.github.refresh().then(() => {
-        if (own && !floor.github.pulls.items.some((p) => p.number === own.number)) setTimeout(() => void floor.github.refresh(), 3000);
+      void floor.forge.refresh().then(() => {
+        if (own && !floor.forge.pulls.items.some((p) => p.number === own.number)) setTimeout(() => void floor.forge.refresh(), 3000);
       });
-      for (const x of info?.repos ?? []) void ctx.floors.get(x.floor)?.github.refresh();
+      for (const x of info?.repos ?? []) void ctx.floors.get(x.floor)?.forge.refresh();
     }));
   },
   'term.input'(ctx, c, msg) {

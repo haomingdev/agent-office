@@ -8,7 +8,9 @@ import type { FloorDef } from './building.js';
 import { excludeFromGit } from './config.js';
 import { agentProviders, configuredProvider } from './agents.js';
 import { WorkerManager, workedMs, type HookEnv, type RunAs } from './workers.js';
-import { GitHub, MergeWatch } from './github.js';
+import { MergeWatch } from './github.js';
+import { forgeWords, repoForge, type ForgeKind } from '../shared/floors.js';
+import { forgeFor, originOf, type Forge } from './forge.js';
 import type { GhAs } from './signins.js';
 import { TaskQueue } from './queue.js';
 import { Changes } from './changes.js';
@@ -26,7 +28,7 @@ import { Worktrees, type WorktreeCleanup } from './worktrees.js';
 import { landedWork, landedWorkers, type Landed } from './leave-on-merge.js';
 import type { Ledger } from './usage.js';
 import type { Capacity } from './machine.js';
-import { officePrompt, type PromptSource } from './prompts.js';
+import { forgePrompts, officePrompt, type PromptSource } from './prompts.js';
 
 type ToastLevel = 'info' | 'warn' | 'error';
 
@@ -45,8 +47,8 @@ export interface FloorContext {
   prompts: PromptSource;
   /** Workers hired by an account run on its own sign-ins (see signins.ts). */
   runAs?: RunAs;
-  /** How to run gh as an account: its own sign-in, the office's (undefined), or why it can't. */
-  ghAs(owner: string | undefined): GhAs | undefined | string;
+  /** How to run gh (or glab, for a GitLab floor) as an account: its own sign-in, the office's (undefined), or why it can't. */
+  ghAs(owner: string | undefined, forge: ForgeKind): GhAs | undefined | string;
   /** To everyone on this floor. */
   emit(floor: Floor, msg: ServerMsg, droppable?: boolean): void;
   toast(floor: Floor, text: string, level?: ToastLevel): void;
@@ -74,13 +76,13 @@ export interface FloorContext {
 
 /** The open pull request on a floor's board whose head is `branch`. */
 function openPull(floor: Floor, branch: string): { number: number; url: string } | undefined {
-  const pr = floor.github.pulls.items.find((p) => p.state === 'OPEN' && p.headRefName === branch);
+  const pr = floor.forge.pulls.items.find((p) => p.state === 'OPEN' && p.headRefName === branch);
   return pr ? { number: pr.number, url: pr.url } : undefined;
 }
 
 /** How long after a PR list or a worker's change the office looks for workers whose PR merged. */
 const LANDED_DELAY_MS = 1500;
-/** Boards on a floor nobody is on, with nothing running, are asked GitHub about this seldom. */
+/** Boards on a floor nobody is on, with nothing running, are asked GitHub (or GitLab) about this seldom. */
 const IDLE_REFRESH_MS = 10 * 60_000;
 const REFRESH_MS = 90_000;
 
@@ -113,7 +115,10 @@ export class Floor {
   readonly dir: string;
   readonly project: ProjectInfo;
   readonly workers: WorkerManager;
-  readonly github: GitHub;
+  /** Its repository: owner/name on GitHub, host/group/…/project on a GitLab; the floor's own when it was added, else its origin's. */
+  readonly repo?: string;
+  /** Its issues and pull requests (merge requests on GitLab). */
+  readonly forge: Forge;
   readonly queue: TaskQueue;
   readonly changes: Changes;
   readonly decor: Decor;
@@ -153,6 +158,9 @@ export class Floor {
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     excludeFromGit(def.dir);
     this.project = projectInfo(def.dir, def.name, ctx.agentCmd, ctx.agentArgs);
+    this.repo = def.repo ?? originOf(def.dir);
+    // The prompts its workers get: GitLab's defaults (merge requests, glab) on a GitLab floor.
+    const prompts = forgePrompts(ctx.prompts, repoForge(this.repo) ?? 'github');
     this.docs = new Docs(def.dir);
     // Before the workers and the dog: the back office's desks are only there once it's built.
     this.plan = new FloorPlanStore(dataDir);
@@ -201,14 +209,15 @@ export class Floor {
       },
       ctx.ledger,
       ctx.capacity,
-      ctx.prompts,
+      prompts,
       ctx.runAs,
       ctx.dshProfile,
     );
     this.workers.wing = () => this.plan.wing;
 
-    this.github = new GitHub(
+    this.forge = forgeFor(
       def.dir,
+      this.repo,
       (state) => ctx.emit(this, { t: 'gh.issues', state }),
       (state) => {
         ctx.emit(this, { t: 'gh.pulls', state });
@@ -217,14 +226,15 @@ export class Floor {
         // A worker may have opened one from a branch it made itself, mid-turn or from a shell.
         void this.workers.syncBranches();
         for (const p of this.merges.look(state.items)) {
-          ctx.toast(this, `🎉 PR #${p.number} merged: ${p.title}`);
+          const w = forgeWords(this.forge.kind);
+          ctx.toast(this, `🎉 ${w.pr} ${w.ref}${p.number} merged: ${p.title}`);
           this.merged(p.number);
         }
         this.sendLandedHome();
         ctx.pullsChanged(this);
       },
     );
-    // The 📋 task queue seats workers by itself: it watches the workers and links PRs from GitHub.
+    // The 📋 task queue seats workers by itself: it watches the workers and links PRs from GitHub (or MRs from GitLab).
     this.queue = new TaskQueue(dataDir, this.workers, !!this.project.branch, {
       update: (state) => {
         ctx.emit(this, { t: 'queue', state });
@@ -233,17 +243,17 @@ export class Floor {
       },
       toast: (text, level) => ctx.toast(this, text, level),
       claimIssue: (issue, owner) => {
-        const as = ctx.ghAs(owner);
-        return typeof as === 'string' ? Promise.resolve(as) : this.github.claim(issue, as);
+        const as = ctx.ghAs(owner, this.forge.kind);
+        return typeof as === 'string' ? Promise.resolve(as) : this.forge.claim(issue, as);
       },
-      refreshGitHub: () => void this.github.refresh(),
+      refreshGitHub: () => void this.forge.refresh(),
       hiringPaused: () => ctx.ledger.hiringPaused,
       room: () => ctx.capacity.room(),
       emptied: () => {
         ctx.toast(this, '📋 The queue is empty: every task is done 🎉');
         ctx.emit(this, { t: 'gong', why: 'queue' });
       },
-      worktreeNote: () => officePrompt(ctx.prompts, 'queue.worktree'),
+      worktreeNote: () => officePrompt(prompts, 'queue.worktree'),
     });
 
     // Meetings seat their own workers round the meeting room's table and run them round by round.
@@ -268,10 +278,11 @@ export class Floor {
         toast: (text, level) => ctx.toast(this, text, level),
         hiringPaused: () => ctx.ledger.hiringPaused,
         postReview: (pr, file, owner) => {
-          const as = ctx.ghAs(owner);
-          return typeof as === 'string' ? Promise.reject(new Error(as)) : this.github.review(pr, file, as);
+          const as = ctx.ghAs(owner, this.forge.kind);
+          return typeof as === 'string' ? Promise.reject(new Error(as)) : this.forge.review(pr, file, as);
         },
-        prompt: (id) => ctx.prompts.text(id),
+        prompt: (id) => prompts.text(id),
+        forge: () => this.forge.kind,
       },
     );
 
@@ -294,14 +305,14 @@ export class Floor {
           worktreeBase: r.base,
           baseBranch: r.from ?? null,
           openPull: (branch) => (other ? openPull(other, branch) : undefined),
-          refreshGitHub: () => void other?.github.refresh(),
+          refreshGitHub: () => void other?.forge.refresh(),
         };
       },
       (branch) => openPull(this, branch),
       {
         state: (state, ids) => ctx.changes(state, ids),
         toast: (text, level) => ctx.toast(this, text, level),
-        refreshGitHub: () => void this.github.refresh(),
+        refreshGitHub: () => void this.forge.refresh(),
       },
     );
 
@@ -310,10 +321,10 @@ export class Floor {
     this.whiteboard = new Whiteboard(dataDir);
     this.ready = this.workers.start();
 
-    void this.github.refresh();
+    void this.forge.refresh();
     // A floor with people on it, or work under way, keeps its boards fresh; the others check in now and then.
     this.timer = setInterval(() => {
-      if (this.active() || Date.now() - this.github.issues.fetchedAt > IDLE_REFRESH_MS) void this.github.refresh();
+      if (this.active() || Date.now() - this.forge.issues.fetchedAt > IDLE_REFRESH_MS) void this.forge.refresh();
     }, REFRESH_MS);
   }
 
@@ -333,11 +344,12 @@ export class Floor {
     this.landedTimer = setTimeout(() => {
       this.landedTimer = undefined;
       if (!this.ctx.leaveOnMerge()) return;
-      const pullsOf = (id: string) => this.ctx.floor(id)?.github.pulls.items;
-      for (const landed of landedWorkers(this.workers.list(), this.github.pulls.items, this.queue.state().tasks, pullsOf)) {
+      const pullsOf = (id: string) => this.ctx.floor(id)?.forge.pulls.items;
+      for (const landed of landedWorkers(this.workers.list(), this.forge.pulls.items, this.queue.state().tasks, pullsOf)) {
         const { worker, head, heads } = landed;
         if (!worker.repos?.length) {
-          this.goHome(worker, `PR #${landed.pr} merged`, head);
+          const w = forgeWords(this.forge.kind);
+          this.goHome(worker, `${w.pr} ${w.ref}${landed.pr} merged`, head);
           continue;
         }
         // Across repositories, one PR can merge before another repository's work even has one:
@@ -357,7 +369,7 @@ export class Floor {
    * and, for a worker across repositories, on the others too (see landedWork).
    */
   landed(worker: WorkerInfo): Landed | undefined {
-    return landedWork(worker, this.github.pulls.items, this.queue.state().tasks, (id) => this.ctx.floor(id)?.github.pulls.items);
+    return landedWork(worker, this.forge.pulls.items, this.queue.state().tasks, (id) => this.ctx.floor(id)?.forge.pulls.items);
   }
 
   /**
@@ -382,7 +394,7 @@ export class Floor {
 
   /** Someone just walked in: boards that haven't been looked at in a while get fetched again. */
   arrived() {
-    if (Date.now() - Math.max(this.github.issues.fetchedAt, this.github.pulls.fetchedAt) > REFRESH_MS) void this.github.refresh();
+    if (Date.now() - Math.max(this.forge.issues.fetchedAt, this.forge.pulls.fetchedAt) > REFRESH_MS) void this.forge.refresh();
   }
 
   private active(): boolean {
@@ -394,7 +406,8 @@ export class Floor {
     return {
       id: this.id,
       name: this.def.name,
-      repo: this.def.repo,
+      repo: this.repo,
+      forge: this.forge.kind,
       dir: this.dir,
       branch: this.project.branch,
       palette: this.def.palette,
@@ -413,7 +426,7 @@ export class Floor {
     clearInterval(this.timer);
     clearTimeout(this.landedTimer);
     this.dog.stop();
-    this.github.stop();
+    this.forge.stop();
     this.queue.shutdown();
     this.meetings.shutdown();
     this.changes.stop();

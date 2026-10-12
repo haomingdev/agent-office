@@ -50,7 +50,7 @@ export function validRepos(raw: unknown): WorkerRepo[] | undefined {
   return repos.length ? repos : undefined;
 }
 
-/** owner/name of a checkout's origin on GitHub, when it has one. */
+/** owner/name of a checkout's origin on GitHub (host/group/…/project on a GitLab), when it has one. */
 export function originRepo(dir: string): string | undefined {
   try {
     return normalizeRepo(execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }).trim());
