@@ -20,7 +20,7 @@ and jump into any of them together. Every GitHub repo (or GitLab project) is a f
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=flat-square)](#run-locally)
 [![Built with TypeScript](https://img.shields.io/badge/built%20with-TypeScript-3178c6?style=flat-square)](https://www.typescriptlang.org)
 
-[**Run locally**](#run-locally) · [**GitLab**](#gitlab) · [**Deploy to AWS**](#deploy-to-aws-ec2) · [**Azure**](#deploy-to-azure) · [**Railway**](#deploy-to-railway) · [**Fly.io**](#deploy-to-flyio) · [**Dokploy**](#deploy-to-dokploy) · [**Coolify**](#deploy-to-coolify) · [**Any server**](#deploy-to-any-ubuntu-or-debian-server) · [**Add users**](#add-users) · [**Controls**](#controls) · [**Features**](docs/features.md) · [**How it works**](docs/how-it-works.md)
+[**Run locally**](#run-locally) · [**GitLab**](#gitlab) · [**Jira**](#jira) · [**Deploy to AWS**](#deploy-to-aws-ec2) · [**Azure**](#deploy-to-azure) · [**Railway**](#deploy-to-railway) · [**Fly.io**](#deploy-to-flyio) · [**Dokploy**](#deploy-to-dokploy) · [**Coolify**](#deploy-to-coolify) · [**Any server**](#deploy-to-any-ubuntu-or-debian-server) · [**Add users**](#add-users) · [**Controls**](#controls) · [**Features**](docs/features.md) · [**How it works**](docs/how-it-works.md)
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/AgentSystemLabs/agent-office/main/install.sh | bash
@@ -37,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/AgentSystemLabs/agent-office/main/i
 - **Talk instead of typing.** Hold **Ctrl+Space** (or the **🎤**) in a worker's terminal or a prompt box and say what you want: it's typed in for you to send. Your browser does the listening, so there's nothing to install.
 - **You can't miss who needs you.** A worker that stops to ask you something lights a red beacon over its desk, puts a banner on your screen saying who and what for, and sounds an alarm. One that has finished jumps up and down and dings. Press **N** to go straight to whoever is waiting.
 - **From your phone, too.** `/lite` is the office in 2D: every worker and what it's waiting on, its terminal with the keys a phone keyboard lacks, and the boards. The 3D office offers it on a phone or a slow computer.
-- **GitHub or GitLab on the walls.** Issues and pull requests (merge requests on a GitLab floor) hang on cork boards. Hand an issue to a worker, queue tasks, give a worker its own git worktree and open its PR with one key (if one gets deleted behind the office's back, the worker waits at its desk until you rebuild it). One task can span several projects: the worker gets a worktree of each, and a PR in each that links the others.
+- **GitHub or GitLab on the walls.** Issues and pull requests (merge requests on a GitLab floor) hang on cork boards. Hand an issue to a worker, queue tasks, give a worker its own git worktree and open its PR with one key (if one gets deleted behind the office's back, the worker waits at its desk until you rebuild it). One task can span several projects: the worker gets a worktree of each, and a PR in each that links the others. Or put a Jira board up as every floor's issues board ([Jira](#jira)).
 - **Agents that manage agents.** Every worker can list, hire, message and send home the others, through an `agent-office` MCP server (Claude Code, Codex, OpenCode) or the `office-workers` command. Ask one to "send everyone whose PR merged home" and it does, deleting their worktrees and branches unless they hold unpushed work. A worker that opens its pull request itself (`gh pr create`) shows it at its desk, and one the office missed can be told which is its own (`office-workers pr`).
 - **Together.** Voice, chat, screen sharing on the lounge TV and a shared whiteboard.
 
@@ -115,6 +115,10 @@ glab auth login --hostname gitlab.example.com
 ```
 
 The elevator then lists that GitLab's projects next to your GitHub repos, or you can type `gitlab.example.com/group/project` (or paste its URL). A GitLab floor has everything a GitHub one has, in GitLab's words: an issues board and a **merge requests** board, MR windows with their pipeline jobs, line threads and diff, merge, comment, close and labels, opening an MR from a desk with **O**, and worker prompts that use `glab`. With accounts, everyone can sign in to their own GitLab in **🔐 Your sign-ins**. A checkout you already have becomes a floor when you start the office in it, or when you add it to `floors.json`. All of it is in [docs/gitlab.md](docs/gitlab.md).
+
+## Jira
+
+If your team tracks its work on a Jira Cloud board, an admin pastes the board's link (`https://your-site.atlassian.net/jira/software/c/projects/KEY/boards/143`) into **⚙️ Settings → 🏢 Building → Jira board**, with an Atlassian email and [API token](https://id.atlassian.com/manage-profile/security/api-tokens) for the office. Every floor's issues board is then that Jira board: its own columns, a filter by assignee, the to-do column's tickets on the cork board, and a window for each ticket where you move it, assign it, comment, or hand it to a worker, who gets the ticket's text in its prompt. With accounts, everyone pastes their own token in **🔐 Your sign-ins**, and what they do in Jira goes out as them. Tokens stay on the office's machine. All of it is in [docs/jira.md](docs/jira.md).
 
 ## Deploy to AWS (EC2)
 
@@ -367,7 +371,7 @@ deploy/dokploy.sh ssh 'node /opt/agent-office/bin/agent-office.js accounts invit
 deploy/coolify.sh ssh 'node /opt/agent-office/bin/agent-office.js accounts invite ada'   # on Coolify
 ```
 
-**Their own Claude and GitHub.** With accounts, everyone's workers run on their own Claude plan, and the office acts on GitHub as them: comments, merges, labels, pushes and pull requests show up under their name. The first time someone comes in, **🔐 Your sign-ins** opens (it's in the **☰** menu too). *Sign in with Claude* gives them Claude's sign-in page and takes back the code it shows. *Sign in with GitHub* shows a one-time code for github.com/login/device. They can paste a token from `claude setup-token`, or a GitHub token, instead. On a building with GitLab floors, a GitLab card takes a GitLab personal access token the same way ([docs/gitlab.md](docs/gitlab.md#everyones-own-gitlab)). A 🐚 shell they open at a desk runs as them, so `claude auth login` and `gh auth login` typed there work too. Admins can use the office machine's own sign-ins instead. Each account's sign-ins live in `.agent-office/homes/<account>/`, and revoking the account deletes them. The boards are read with the machine's own `gh`, so that account needs read access to the repos. Running it just for yourself, with no accounts, none of this applies.
+**Their own Claude and GitHub.** With accounts, everyone's workers run on their own Claude plan, and the office acts on GitHub as them: comments, merges, labels, pushes and pull requests show up under their name. The first time someone comes in, **🔐 Your sign-ins** opens (it's in the **☰** menu too). *Sign in with Claude* gives them Claude's sign-in page and takes back the code it shows. *Sign in with GitHub* shows a one-time code for github.com/login/device. They can paste a token from `claude setup-token`, or a GitHub token, instead. On a building with GitLab floors, a GitLab card takes a GitLab personal access token the same way ([docs/gitlab.md](docs/gitlab.md#everyones-own-gitlab)), and with a Jira board, a Jira card takes an Atlassian API token ([docs/jira.md](docs/jira.md#4-everyones-own-sign-in-accounts)). A 🐚 shell they open at a desk runs as them, so `claude auth login` and `gh auth login` typed there work too. Admins can use the office machine's own sign-ins instead. Each account's sign-ins live in `.agent-office/homes/<account>/`, and revoking the account deletes them. The boards are read with the machine's own `gh`, so that account needs read access to the repos. Running it just for yourself, with no accounts, none of this applies.
 
 **3. Turn off the shared password.** Until you do, anyone who knows the office password can get in, as an admin. Once everyone has an account, switch it off in **🔑 Accounts** (signed in with your own admin account), or `agent-office accounts password off`.
 
@@ -419,6 +423,7 @@ Every change to the app that lands on `main` is published as a GitHub release by
 - [Agents](docs/agents.md): Claude Code, Codex and OpenCode, models and effort, and the office's prompts
 - [Configuration](docs/configuration.md): every command-line option, and where the office keeps its data
 - [GitLab](docs/gitlab.md): GitLab projects as floors, merge requests, `glab`, and everyone's own GitLab sign-in
+- [Jira](docs/jira.md): a Jira Cloud board as every floor's issues board, API tokens, and everyone's own Jira sign-in
 - [Maps](docs/maps.md): the castle, the space station, and making a map of your own
 - [Workers' servers on your own computer](docs/tunnel.md): `agent-office tunnel`, which opens every worker's web server on your computer by itself
 - [AWS reference](docs/aws.md): Tailscale, service tunnels, upgrades, and everything `deploy/aws.sh` does
