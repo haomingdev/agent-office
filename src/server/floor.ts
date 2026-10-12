@@ -11,6 +11,8 @@ import { WorkerManager, workedMs, type HookEnv, type RunAs } from './workers.js'
 import { MergeWatch } from './github.js';
 import { forgeWords, repoForge, type ForgeKind } from '../shared/floors.js';
 import { forgeFor, originOf, type Forge } from './forge.js';
+import { withJira } from './jira/forge.js';
+import type { Jira } from './jira/index.js';
 import type { GhAs } from './signins.js';
 import { TaskQueue } from './queue.js';
 import { Changes } from './changes.js';
@@ -49,6 +51,8 @@ export interface FloorContext {
   runAs?: RunAs;
   /** How to run gh (or glab, for a GitLab floor) as an account: its own sign-in, the office's (undefined), or why it can't. */
   ghAs(owner: string | undefined, forge: ForgeKind): GhAs | undefined | string;
+  /** The Jira board, every floor's issues board while it's on (see jira/). */
+  jira: Jira;
   /** To everyone on this floor. */
   emit(floor: Floor, msg: ServerMsg, droppable?: boolean): void;
   toast(floor: Floor, text: string, level?: ToastLevel): void;
@@ -218,10 +222,11 @@ export class Floor {
     this.workers.wing = () => this.plan.wing;
     this.workers.skipAllowed = () => ctx.skipPermissions();
 
-    this.forge = forgeFor(
+    const own = forgeFor(
       def.dir,
       this.repo,
-      (state) => ctx.emit(this, { t: 'gh.issues', state }),
+      // While the Jira board is on, it's the floor's issues instead (see jira/forge.ts).
+      (state) => ctx.jira.on || ctx.emit(this, { t: 'gh.issues', state }),
       (state) => {
         ctx.emit(this, { t: 'gh.pulls', state });
         this.queue?.onPulls(state.items);
@@ -237,6 +242,7 @@ export class Floor {
         ctx.pullsChanged(this);
       },
     );
+    this.forge = withJira(ctx.jira, own, (state) => ctx.emit(this, { t: 'gh.issues', state }));
     // The 📋 task queue seats workers by itself: it watches the workers and links PRs from GitHub (or MRs from GitLab).
     this.queue = new TaskQueue(dataDir, this.workers, !!this.project.branch, {
       update: (state) => {
@@ -246,6 +252,8 @@ export class Floor {
       },
       toast: (text, level) => ctx.toast(this, text, level),
       claimIssue: (issue, owner) => {
+        // A ticket on the Jira board: Jira moves and assigns it, and says so itself when it can't.
+        if (ctx.jira.owns(issue)) return Promise.resolve(void ctx.jira.take(issue, owner, (text) => ctx.toast(this, text, 'warn')));
         const as = ctx.ghAs(owner, this.forge.kind);
         return typeof as === 'string' ? Promise.resolve(as) : this.forge.claim(issue, as);
       },

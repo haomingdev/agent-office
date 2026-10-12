@@ -15,6 +15,8 @@ export function gates(ctx: Ctx): Gates {
    */
   const takeIssue = (c: Client, floor: Floor, n: number) => {
     floor.queue.dropIssue(n);
+    // A ticket on the Jira board: Jira moves it on and assigns it (see Jira.take).
+    if (ctx.jira.owns(n)) return ctx.jira.take(n, c.accountId, (text) => ctx.warn(c, text));
     const kind = floor.forge.kind;
     const as = c.accountId ? ctx.signins.ghAs(c.accountId, kind) : undefined;
     const site = forgeWords(kind).site;

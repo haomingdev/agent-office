@@ -7,6 +7,7 @@
 import { STATION_AGENT, type StationKind } from './layout.js';
 import type { ForgeKind } from './floors.js';
 import { GITLAB_JOB, GITLAB_PROMPTS, gitlabQueueApi } from './prompts-gitlab.js';
+import { JIRA_PROMPTS } from './prompts-jira.js';
 
 export { meetingRefs } from './prompts-gitlab.js';
 
@@ -117,6 +118,8 @@ const DEFS = {
     vars: ISSUE_VARS,
     text: 'GitHub issue #{{number}}: “{{title}}”. Read it first with gh issue view {{number}} --comments.',
   },
+  // The same for a ticket on the Jira board (prompts-jira.ts).
+  ...JIRA_PROMPTS,
 
   // --- 🔀 Pull requests board ---
   'pull.review': {

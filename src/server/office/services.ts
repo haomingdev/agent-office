@@ -18,6 +18,7 @@ import { Maps } from '../maps.js';
 import { OfficePrompts } from '../prompts.js';
 import { LeaveOnMerge } from '../leave-on-merge.js';
 import { SkipPermissions } from '../skip-permissions.js';
+import { Jira } from '../jira/index.js';
 import type { ServiceInfo, ServicesState } from '../../shared/protocol.js';
 import type { BuildingServices, Ctx, LateServices } from './context.js';
 import type { Client } from './client.js';
@@ -64,6 +65,15 @@ export function createServices(ctx: Ctx): BuildingServices {
       for (const c of clients.values()) if (c.accountId === id && !c.out) ctx.sendTo(c, { t: 'signins', state: signins.state(id) });
     },
   );
+  // The Jira board, every floor's issues board once it's set up (⚙️ Settings): who's signed in to it
+  // hears so on their own; the office's own token is everyone's on the shared password.
+  const jira = new Jira(cfg.dataDir, {
+    state: (state) => ctx.broadcast({ t: 'jira', state }),
+    you: (id) => {
+      for (const c of clients.values()) if (c.accountId === id && !c.out) ctx.sendTo(c, { t: 'jira.you', state: jira.you(id) });
+    },
+  });
+
   // Accounts revoked from the terminal while the office was closed leave their sign-ins behind.
   if (!accounts.unreadableFile) signins.prune(new Set(accounts.state(new Set()).accounts.map((a) => a.id)));
 
@@ -129,7 +139,7 @@ export function createServices(ctx: Ctx): BuildingServices {
     });
   };
 
-  return { sky, themes, maps, prompts, leaveOnMerge, skipPermissions, ledger, signins, limits, accountLimits, webhook, machine, limitsOf, pumpQueues };
+  return { sky, themes, maps, prompts, leaveOnMerge, skipPermissions, ledger, signins, limits, accountLimits, webhook, machine, jira, limitsOf, pumpQueues };
 }
 
 /** What's made once the floors are open: the SSH team, the tailnet, workers' web servers, pictures and upgrades. */
