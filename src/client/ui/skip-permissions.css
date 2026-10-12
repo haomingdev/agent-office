@@ -1,0 +1,5 @@
+/* ⚡ Skip permission prompts: the hire window's box, and the badge on a worker hired that way. */
+.modal label.skip-perms-row { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; font-weight: 700; cursor: pointer; }
+.skip-perms-row input { margin: 3px 0 0; accent-color: var(--accent); flex: none; }
+.skip-perms-row small { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+.pill.skip-perms { background: #fff3c4; }

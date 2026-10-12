@@ -8,6 +8,7 @@ import { $, h, STATUS_LABEL, timeAgo } from './dom';
 import { prName } from './forge';
 import { usageLabel, usageTitle } from './usage';
 import { providerLabel, providerUsageState, providerWaitingLabel, resolvedProvider, modelBadge } from './provider';
+import { SKIP_BADGE } from './skip-permissions';
 
 export function renderWorkers(onOpen: (id: string) => void) {
   const ul = $('workers');
@@ -21,7 +22,7 @@ export function renderWorkers(onOpen: (id: string) => void) {
     const waiting = usageState === 'waiting' ? providerWaitingLabel(providerKind, store.project) : '';
     const usageNote = usageState === 'untracked' ? ' · usage untracked' : waiting ? ` · ${waiting}` : '';
     const badge = w.kind === 'agent' ? modelBadge(w.provider, w.model, w.effort, w.usage?.model) : undefined;
-    const sub = [provider && `⚙️ ${provider}${badge ? ` · ${badge}` : ''}${usageNote}`, w.worktree && `🌿 ${w.worktree.branch}`, w.repos?.length && `🗂️ ${w.repos.length + 1} repos`, w.pr && `🔀 ${prName(w.pr.number)}`, w.activity || w.title || w.prompt].filter(Boolean).join(' · ');
+    const sub = [provider && `⚙️ ${provider}${badge ? ` · ${badge}` : ''}${usageNote}`, w.skipPermissions && SKIP_BADGE, w.worktree && `🌿 ${w.worktree.branch}`, w.repos?.length && `🗂️ ${w.repos.length + 1} repos`, w.pr && `🔀 ${prName(w.pr.number)}`, w.activity || w.title || w.prompt].filter(Boolean).join(' · ');
     // What it's stopped on, and since when, on a line of its own under its name.
     const ask = asking ? h('span.ask', {}, `🙋 ${w.activity ?? 'Waiting on an answer'}${w.waitingSince ? ` · ${timeAgo(w.waitingSince)}` : ''}`) : null;
     ul.append(

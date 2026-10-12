@@ -12,6 +12,7 @@ import { words } from './forge';
 import { agentFields, choiceLabel, officeChoice } from './provider';
 import { openPromptEditor, rewrittenPrompts } from './prompts';
 import { outsideSetting } from './settings-sky';
+import { SKIP_SETTING, skipPermissionsSetting } from './settings-skip';
 import { choiceRow } from './settings-rows';
 
 const VIEWS: [ViewMode, string, string][] = [
@@ -439,6 +440,9 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
   // The dog on this floor: its name, breed and coat, for everyone here (see settings-dog.ts).
   const { section: dogSection, paint: paintDog } = dogSetting(net, (body) => setting('Office dog', 'floor', ...body));
 
+  // Whether workers may be hired to skip their permission prompts, for everyone (see settings-skip.ts).
+  const skip = skipPermissionsSetting(net, (body) => setting(SKIP_SETTING, 'office', ...body));
+
   // What the sky's doing, and which clock it keeps (see settings-sky.ts).
   const sky = outside && outsideSetting(net, outside, (body) => setting('Outside', 'office', ...body));
   const account = store.me.account;
@@ -473,6 +477,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
       setting('Default worker', 'office', agentNow, agent.element, agentActions, agentNote),
       setting('Worker limit', 'office', limitRow, limitNote),
       setting(leaveTitle, 'office', leaveRow, leaveNote),
+      skip.section,
       setting('Prompts', 'office', promptsOpen, promptsNote),
     ],
   };
@@ -528,6 +533,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
       sky?.off();
       offMap();
       offLeave();
+      skip.off();
       offLimit.forEach((off) => off());
       offDir.forEach((off) => off());
       offPrompts.forEach((off) => off());

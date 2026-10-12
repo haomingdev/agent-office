@@ -20,6 +20,8 @@ const HOOK_TRIES = 6;
 /** First-run screens Claude shows before it can take a prompt. */
 const SETUP_PROMPT = /trust this folder|Do you trust the files|Select login method|Choose the text style|Press Enter to continue|Bypass Permissions mode/i;
 const NOT_LOGGED_IN = /Not logged in\s*·\s*Run \/login|Invalid API key|Please run \/login/i;
+/** What a worker hired to skip its permission prompts starts with (see WorkerInfo.skipPermissions). */
+export const SKIP_PERMISSIONS = '--dangerously-skip-permissions';
 
 interface ClaudeSetup {
   /** Its --settings: the office's hooks. */
@@ -79,7 +81,11 @@ process.stdin.on('end', () => {
   }
   // Looking at the office's workers doesn't need anyone's say-so; hiring and sending home still asks.
   const permissions = { allow: MCP_READ_ONLY };
-  writeFileSync(settingsPath, JSON.stringify({ hooks, permissions }, null, 2), { mode: 0o600 });
+  // A worker started with --dangerously-skip-permissions (see SKIP_PERMISSIONS) goes straight to work,
+  // not to Claude's one-time "Bypass Permissions mode" warning, which nobody is there to accept. The
+  // person's own ~/.claude.json is left alone; without the flag, this changes nothing.
+  const skipDangerousModePermissionPrompt = true;
+  writeFileSync(settingsPath, JSON.stringify({ hooks, permissions, skipDangerousModePermissionPrompt }, null, 2), { mode: 0o600 });
   return settingsPath;
 }
 
@@ -206,6 +212,7 @@ export const claude: ProviderAdapter<undefined, ClaudeSetup> = {
     // A model/effort chosen for this worker overrides whatever --agent-args set office-wide.
     if (info.model) args.push('--model', info.model);
     if (info.effort) args.push('--effort', info.effort);
+    if (info.skipPermissions && !args.includes(SKIP_PERMISSIONS)) args.push(SKIP_PERMISSIONS);
     // The queue agent only ever adds to the queue: without these it can't touch the checkout's files.
     if (station === 'queue') args.push('--disallowedTools', ...QUEUE_AGENT_DISALLOWED_TOOLS);
     if (resumeSessionId) args.push('--resume', resumeSessionId);

@@ -168,6 +168,11 @@ export interface ProviderMeta {
   effortLabel?: string;
   /** Why it has no model or effort to pick, for the hire dialog to say. */
   unpicked?: string;
+  /**
+   * Its CLI has a flag to run without asking permission (`--dangerously-skip-permissions`), which a
+   * worker hired with ⚡ Skip permission prompts starts with (see server/skip-permissions.ts).
+   */
+  skipsPermissions?: boolean;
   /** How its spend shows on a worker's card, in the workers list and in the queue (see client ui/provider.ts). */
   usage: {
     /** Tracked from its start, numbers or not: the office reads them off its session itself. */
@@ -197,6 +202,7 @@ export const PROVIDER_META: Record<AgentProvider, ProviderMeta> = {
       hint: 'The cost panel tracks each model separately.',
     },
     takesEffort: true,
+    skipsPermissions: true,
     usage: { tracked: true, note: 'Office usage and budget track Claude Code.' },
   },
   opencode: {
@@ -231,6 +237,7 @@ export const PROVIDER_META: Record<AgentProvider, ProviderMeta> = {
       invalid: 'Use a Codex model id without whitespace (up to 128 characters).',
     },
     takesEffort: true,
+    skipsPermissions: true,
     usage: {
       reports: true,
       noCost: true,
@@ -318,6 +325,7 @@ export const PROVIDER_META: Record<AgentProvider, ProviderMeta> = {
       hint: 'Optional model id; suggestions come from `cursor-agent models` once Cursor is signed in on the office machine. An effort goes in brackets after it: model[effort=high].',
       invalid: 'Use a Cursor model id: letters, digits and . _ -, with any overrides in brackets, like model[effort=high] (up to 128 characters).',
     },
+    skipsPermissions: true,
     usage: { note: 'Cursor uses the Cursor CLI login on the office machine. Usage and cost stay in its terminal and your Cursor account; the office does not meter them.' },
   },
   custom: {
@@ -341,6 +349,11 @@ export function takesModel(provider: unknown): boolean {
 /** Whether a reasoning effort can be picked for a worker on `provider`. */
 export function takesEffort(provider: unknown): boolean {
   return !!providerMeta(provider)?.takesEffort;
+}
+
+/** Whether a worker on `provider` can be hired to skip its permission prompts. */
+export function skipsPermissions(provider: unknown): boolean {
+  return !!providerMeta(provider)?.skipsPermissions;
 }
 
 /** A saved model, when `provider` takes that one; for what workers.json or the queue kept, which may be from anywhere. */

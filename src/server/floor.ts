@@ -64,6 +64,8 @@ export interface FloorContext {
   peers(floor: Floor): PeerInfo[];
   /** ⚙️ Settings: a worker whose pull request merged goes home by itself. */
   leaveOnMerge(): boolean;
+  /** ⚙️ Settings: workers may be hired to skip their permission prompts. */
+  skipPermissions(): boolean;
   /** Another floor of the building: a worker across repositories works in its project too (see WorkerInfo.repos). */
   floor(id: string): Floor | undefined;
   /** This floor's pull requests came back: a worker on another floor with a repository here may have landed. */
@@ -214,6 +216,7 @@ export class Floor {
       ctx.dshProfile,
     );
     this.workers.wing = () => this.plan.wing;
+    this.workers.skipAllowed = () => ctx.skipPermissions();
 
     this.forge = forgeFor(
       def.dir,

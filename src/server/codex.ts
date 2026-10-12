@@ -117,6 +117,25 @@ export function codexModelArgs(args: string[], model?: string, effort?: AgentEff
   return out;
 }
 
+/** What a Codex worker hired to skip its approvals starts with (see WorkerInfo.skipPermissions). */
+export const CODEX_SKIP_PERMISSIONS = '--dangerously-bypass-approvals-and-sandbox';
+
+/**
+ * Codex's command line for a worker hired to skip its approvals: CODEX_SKIP_PERMISSIONS, once. Codex
+ * won't take it twice (--yolo is the same flag) or beside an approval policy, so the ones in
+ * --agent-args (--yolo, --full-auto, --ask-for-approval) give way to it.
+ */
+export function codexSkipArgs(args: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '-a' || arg === '--ask-for-approval') i++;
+    else if (![CODEX_SKIP_PERMISSIONS, '--yolo', '--full-auto'].includes(arg) && !arg.startsWith('--ask-for-approval=') && !/^-a./.test(arg)) out.push(arg);
+  }
+  out.push(CODEX_SKIP_PERMISSIONS);
+  return out;
+}
+
 /** Write the stable, self-contained helper invoked by Codex's native command hooks. */
 export function writeCodexHook(dataDir: string): string {
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });

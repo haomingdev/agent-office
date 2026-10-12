@@ -2,7 +2,7 @@
 // since that and ~/.cursor, which the office never touches, are the only places it reads them from,
 // and report on /hooks/cursor. It runs on the machine's own Cursor login. Its spend isn't metered by
 // the office, and nothing tells the office about a permission prompt: a worker waiting on one shows
-// as working until it's answered.
+// as working until it's answered. One hired to skip its permission prompts never asks (--force).
 import { addCursorHooks, cursorBlocked, normalizeCursorHook, removeCursorHooks, withoutCursorLaunchArgs, writeCursorHook } from '../cursor.js';
 import { reduceLifecycle } from '../workers/lifecycle.js';
 import type { ProviderAdapter } from './types.js';
@@ -20,8 +20,9 @@ export const cursor: ProviderAdapter<undefined, CursorSetup> = {
   launch({ h: { info }, args, prompt, resumeSessionId, cwd, setup }) {
     args = withoutCursorLaunchArgs(args);
     addCursorHooks(cwd, setup.hook, info.id);
-    // The office made this folder for it. Cursor's own permission prompts stay as they are.
+    // The office made this folder for it. Cursor's own permission prompts stay, unless it was hired to skip them.
     args.push('--trust');
+    if (info.skipPermissions) args.push('--force');
     // Its chat id is the first one its hooks name. A resumed chat keeps the model it had.
     if (resumeSessionId) args.push(`--resume=${resumeSessionId}`);
     else if (info.model) args.push('--model', info.model);
