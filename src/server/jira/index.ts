@@ -301,12 +301,14 @@ export class Jira {
     return this.creds.verify(this.saved.site, email.trim(), token.trim());
   }
 
-  /** Moves `card` on from the to-do column and assigns it to whoever took it (see take). */
+  /** Moves `card` on from the to-do column (as whoever took it, else the office) and assigns it to them (see take). */
   private async claim(card: JiraCard, accountId: string | undefined): Promise<Taken> {
     const actor = this.actor(accountId);
-    const reader = this.reader();
-    const api = typeof actor !== 'string' ? this.creds.api(this.saved.site!, actor) : typeof reader !== 'string' ? reader.api : undefined;
-    if (!api) return { moved: false, assigned: false, error: typeof actor === 'string' ? actor : String(reader) };
+    // Without a sign-in of their own, the office's token moves it on (never another member's).
+    const office = this.creds.office();
+    const as = typeof actor !== 'string' ? actor : office;
+    if (!as) return { moved: false, assigned: false, error: String(actor) };
+    const api = this.creds.api(this.saved.site!, as);
     const errors: string[] = [];
     let moved = false;
     let assigned = false;

@@ -511,3 +511,23 @@ test("a worker handed a ticket gets the Jira prompt, with what the ticket says; 
   assert.equal(promptText({}, 'jira.work', 'gitlab'), promptText({}, 'jira.work'));
   assert.equal(fillPrompt(promptText({ 'jira.work': { text: 'Do {{key}}' } }, 'jira.work'), vars), 'Do CHAT-7');
 });
+
+test("a ticket taken by someone without a Jira sign-in is moved on as the office, never as another member, and isn't assigned", async () => {
+  const routes = boardRoutes();
+  routes['GET /rest/api/3/issue/CHAT-8/transitions'] = () => ({ body: { transitions: [{ id: '11', name: 'Start', to: { id: '3' } }] } });
+  routes['POST /rest/api/3/issue/CHAT-8/transitions'] = () => ({ status: 204 });
+  const take = async (withOffice: boolean) => {
+    const { jira, fake } = await office(routes, { office: withOffice });
+    await jira.signIn('ada123', ADA.email, ADA.token);
+    await jira.refresh(true);
+    const n = jira.issues.items.find((i) => i.jira!.key === 'CHAT-8')!.number;
+    const warned: string[] = [];
+    jira.take(n, 'bob456', (t) => warned.push(t));
+    await new Promise((r) => setTimeout(r, 20));
+    return { writes: fake.calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path, c.auth === basic(OFFICE) ? 'office' : 'ada']), warned };
+  };
+  assert.deepEqual(await take(true), { writes: [['POST', '/rest/api/3/issue/CHAT-8/transitions', 'office']], warned: [] });
+  const without = await take(false);
+  assert.deepEqual(without.writes, []);
+  assert.match(without.warned[0], /Sign in to Jira first/);
+});
