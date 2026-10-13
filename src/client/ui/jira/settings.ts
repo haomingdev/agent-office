@@ -19,11 +19,19 @@ export function jiraSetting(net: Net, frame: (body: Node[]) => HTMLElement): { s
   const token = h('input', { type: 'password', placeholder: 'API token', 'aria-label': 'Atlassian API token', autocomplete: 'new-password', spellcheck: 'false' }) as HTMLInputElement;
   const saveToken = h('button.btn', { type: 'button' }, 'Save token');
   const tokenRow = h('div.webhook.jira-fields', {}, email, token, saveToken);
+  /** How saving the token went: checking, Jira's answer if it said no, or saved. */
+  const tokenSaid = h('p.setting-note', { hidden: true });
+  let checking = false;
   const office = h('p.setting-note');
   const removeToken = h('button.btn', { type: 'button' }, 'Remove the office’s token');
   const removeRow = h('div.volume', {}, removeToken);
   const note = h('p.setting-note');
-  const section = frame([onRow, linkRow, problem, office, tokenRow, removeRow, note]);
+  const section = frame([onRow, linkRow, problem, office, tokenRow, tokenSaid, removeRow, note]);
+  const tokenSay = (text: string, bad = false) => {
+    tokenSaid.textContent = text;
+    tokenSaid.hidden = !text;
+    tokenSaid.classList.toggle('bad', bad);
+  };
 
   /** Turns it on or off, with the link in the box if there's one. */
   const turn = (on: boolean) => {
@@ -78,9 +86,23 @@ export function jiraSetting(net: Net, frame: (body: Node[]) => HTMLElement): { s
     if (!token.value.trim()) return token.focus();
     net.send({ t: 'jira.office', email: email.value.trim(), token: token.value.trim() });
     token.value = '';
+    checking = true;
+    tokenSay('Checking the token with Jira…');
   });
+  // Jira's answer: an error comes back as jira.you, a token that took as the office's name.
+  const answered = () => {
+    if (!checking) return;
+    const err = store.jiraYou?.error;
+    if (err) {
+      checking = false;
+      tokenSay(`Jira didn’t take it: ${err}`, true);
+    } else if (store.jira.office) {
+      checking = false;
+      tokenSay(`✅ Saved: the office signs in to Jira as ${store.jira.office}.`);
+    }
+  };
   removeToken.addEventListener('click', () => net.send({ t: 'jira.office', email: '', token: '' }));
   paint();
-  const offs = [store.on('jira', paint), store.on('me', paint)];
+  const offs = [store.on('jira', paint), store.on('me', paint), store.on('jira', answered), store.on('jiraYou', answered)];
   return { section, off: () => offs.forEach((off) => off()) };
 }

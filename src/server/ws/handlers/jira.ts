@@ -38,7 +38,8 @@ export const jiraHandlers = {
     if (!ctx.meOf(c.accountId).admin) return ctx.warn(c, "Only admins can set the office's Jira token");
     const token = str(msg.token, 4096).trim();
     void ctx.jira.setOffice(str(msg.email, 300), token).then((err) => {
-      if (err) return ctx.warn(c, err);
+      // Kept in ⚙️ Settings by the token's box, not a toast that's gone before it's read.
+      if (err) return ctx.sendTo(c, { t: 'jira.you', state: { ...ctx.jira.you(c.accountId), error: err } });
       ctx.toastAll(token ? `🔐 ${who} gave the office a Jira API token` : `🔐 ${who} took the office's Jira API token off`);
     });
   },
