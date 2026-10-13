@@ -11,6 +11,7 @@ import type { JukeboxState } from '../jukebox.js';
 import type { WhiteboardView } from '../whiteboard.js';
 import type { AgentProvider } from './agents.js';
 import type { GhIssue, GhPull, GhState } from './github.js';
+import type { JiraState } from './jira.js';
 import type { MeetingState } from './meetings.js';
 import type { PeerInfo } from './presence.js';
 import type { QueueState } from './queue.js';
@@ -127,6 +128,8 @@ export interface FloorView {
   cars: CarState[];
   /** Workers sent home and locked up in the dungeon, on a map that has one. */
   jail: JailState;
+  /** The Jira board, when it's every floor's issues board. */
+  jira: JiraState;
 }
 
 export type FloorClientMsg =

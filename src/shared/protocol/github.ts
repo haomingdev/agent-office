@@ -1,5 +1,7 @@
 // The floor's GitHub boards: issues, pull requests, and what the office does to them.
 
+import type { JiraCard } from './jira.js';
+
 /** A GitHub label; `color` is a CSS color ("#d73a4a"). */
 export interface GhLabel {
   name: string;
@@ -22,6 +24,8 @@ export interface GhIssue {
   updatedAt: string;
   body: string;
   comments: number;
+  /** A ticket on the Jira board, when that's the issues board (see protocol/jira.ts); `number` is its Jira id. */
+  jira?: JiraCard;
 }
 
 export interface GhPull {

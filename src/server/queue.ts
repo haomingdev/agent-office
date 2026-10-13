@@ -420,7 +420,9 @@ export class TaskQueue {
 }
 
 function label(t: QueueTask): string {
-  return t.issue !== undefined ? `#${t.issue}` : `“${t.title.length > 40 ? `${t.title.slice(0, 39)}…` : t.title}”`;
+  // A Jira ticket's task is titled with its key (CHAT-123 …), which names it better than its Jira id.
+  const key = t.issue !== undefined ? /^[A-Z][A-Z0-9_]*-\d+(?=\s|$)/.exec(t.title)?.[0] : undefined;
+  return key ?? (t.issue !== undefined ? `#${t.issue}` : `“${t.title.length > 40 ? `${t.title.slice(0, 39)}…` : t.title}”`);
 }
 
 function firstLine(s: string): string {

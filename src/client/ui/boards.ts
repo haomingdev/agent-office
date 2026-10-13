@@ -3,16 +3,14 @@ import type { GhIssue, GhLabel, GhPull, WorkerInfo } from '../../shared/protocol
 import type { Net } from '../net';
 import { store, workerForPull } from '../state';
 import { h, openModal, timeAgo } from './dom';
-import { prName, words } from './forge';
+import { words } from './forge';
 import { openIssue } from './github/issue-window';
 import { labelChip, openLabels } from './github/labels';
 import { inProgress } from './github/progress';
 import type { BoardActions } from './github/prompts';
 import { openPull } from './github/pull-window';
-import { providerLabel } from './provider';
-
-const TILTS = ['-1.2deg', '0.8deg', '-0.4deg', '1.4deg', '0deg', '-0.9deg'];
-const NOTE_COLORS = ['#fff7b0', '#ffd6e0', '#caffbf', '#bde0fe', '#ffe5b4'];
+import { card, queueChip, workerChip } from './board-cards';
+import { openJiraBoard } from './jira/board';
 
 interface Column<T> {
   /** Names the column in your saved label filters. */
@@ -94,48 +92,14 @@ function labelChips(labels: GhLabel[]) {
 
 const CHECK_ICON: Record<GhPull['checks'], string> = { pass: '🟢', fail: '🔴', pending: '🟡', none: '' };
 
-/** A chip naming a worker and desk, color-coded to match the worker back on the floor. */
-function workerChip(w: WorkerInfo, title: string) {
-  return h('span.desk-link', { style: `--dot:${w.color}`, title }, `🪑 ${w.name} · ${store.plan().byId.get(w.deskId)?.label ?? 'a desk'}`);
-}
-
 /** A chip naming the worker and desk a pull request came from. */
 function deskChip(w: WorkerInfo) {
   return workerChip(w, `Opened from ${w.name}'s desk (${w.worktree?.branch ?? 'its branch'})`);
 }
 
-/** Where an issue stands on the 📋 queue, for its card. */
-function queueChip(issue: number): Node | '' {
-  const t = store.taskForIssue(issue);
-  if (!t) return '';
-  const provider = providerLabel(t.provider, store.project);
-  if (t.status === 'queued') return h('span.qchip', {}, `${store.queue.tasks.find((x) => x.status === 'queued') === t ? '📋 up next' : '📋 queued'} · ${provider}`);
-  if (t.status === 'running') {
-    const w = t.workerId ? store.workers.get(t.workerId) : undefined;
-    if (w) return workerChip(w, `${w.name} is working on this at ${store.plan().byId.get(w.deskId)?.label ?? 'a desk'} · ${provider}`);
-    return h('span.qchip.running', {}, `🤖 ${t.workerName ?? 'a worker'} · ${provider}`);
-  }
-  return t.pr ? h('span.qchip.done', {}, `🔀 ${prName(t.pr.number)} · ${provider}`) : '';
-}
-
-/** `ref` is what comes before the number: # for an issue, the floor's for a pull request (# or !). */
-function card(n: number, title: string, meta: (Node | string)[], i: number, onclick: () => void, onLabels: () => void, ref = '#') {
-  return h(
-    'li.card',
-    {
-      style: `--tilt:${TILTS[n % TILTS.length]};background:${NOTE_COLORS[n % NOTE_COLORS.length]};--pin:${['#ef476f', '#118ab2', '#06d6a0', '#ffd166'][i % 4]}`,
-      tabindex: 0,
-      onclick,
-      onkeydown: ((e: KeyboardEvent) => e.key === 'Enter' && e.target === e.currentTarget && onclick()) as EventListener,
-    },
-    h('button.card-labels', { type: 'button', title: 'Change the labels', 'aria-label': `Change the labels on ${ref}${n}`, onclick: ((e: Event) => (e.stopPropagation(), onLabels())) as EventListener }, '🏷️'),
-    h('div.num', {}, `${ref}${n}`),
-    h('div.ttl', {}, title),
-    h('div.meta', {}, ...meta.filter((m) => m !== '').map((m) => (typeof m === 'string' ? h('span', {}, m) : m))),
-  );
-}
-
 export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActions) {
+  // With the Jira board on, it's every floor's issues board (see jira/board.ts).
+  if (kind === 'issues' && store.jira.on) return openJiraBoard(net, actions);
   const body = h('div.body');
   const status = h('span.board-status');
   const fw = words();

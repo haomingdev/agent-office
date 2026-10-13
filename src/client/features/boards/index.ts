@@ -12,7 +12,7 @@ import { openBoard } from '../../ui/boards';
 import { inProgress } from '../../ui/github/progress';
 import type { BoardActions } from '../../ui/github/prompts';
 import { clip } from '../../ui/dom';
-import { words } from '../../ui/forge';
+import { issueRef, words } from '../../ui/forge';
 import { openIssue } from '../../ui/pull';
 import { openServices } from '../../ui/services';
 import { BoardTexture, QueueBoardTexture, ServicesBoardTexture } from './world';
@@ -105,8 +105,9 @@ export function installBoards(ctx: Ctx, deps: BoardsDeps) {
     reach: 9,
     hint: () => {
       const aimedNote = deps.aimedNote();
-      if (aimedNote) return { k: String(aimedNote.number), parts: [hintTitle(clip(`📌 #${aimedNote.number} ${aimedNote.title}`, 60)), key('E', 'Take it'), key('O', 'Read it')] };
-      return issuesTex.hasNotes ? { k: 'notes', parts: [hintTitle('📌 Issues board'), key('E', 'Open'), aside('or point at a note to take it')] } : boardHint('📌 Issues board');
+      if (aimedNote) return { k: String(aimedNote.number), parts: [hintTitle(clip(`📌 ${issueRef(aimedNote.number)} ${aimedNote.title}`, 60)), key('E', 'Take it'), key('O', 'Read it')] };
+      const name = store.jira.on ? '📌 Jira board' : '📌 Issues board';
+      return issuesTex.hasNotes ? { k: 'notes', parts: [hintTitle(name), key('E', 'Open'), aside('or point at a note to take it')] } : boardHint(name);
     },
     use: (_it, key, note) => {
       // A note on the issues board: E takes it straight off the cork, O opens it to read first.

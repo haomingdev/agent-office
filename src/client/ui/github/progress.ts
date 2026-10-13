@@ -7,5 +7,7 @@ import type { GhIssue, QueueTask } from '../../../shared/protocol';
  * holds the ones still waiting to be taken.
  */
 export function inProgress(issue: GhIssue, task: QueueTask | undefined): boolean {
+  // A Jira ticket waits to be taken in the board's to-do column, whoever it's assigned to.
+  if (issue.jira) return !issue.jira.todo || !!issue.taken || task?.status === 'running';
   return !!issue.taken || issue.assignees.length > 0 || issue.labels.some((l) => /progress|doing|wip|started/i.test(l.name)) || task?.status === 'running';
 }

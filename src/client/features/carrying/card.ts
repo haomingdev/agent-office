@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { CarriedIssue } from '../../../shared/protocol';
 import { NOTE_COLORS, PINS, wrap } from '../boards/world';
 import { toon, toonUnique } from '../../world/toon';
+import { issueRef } from '../../ui/forge';
 
 const W = 320;
 const H = 240;
@@ -21,7 +22,7 @@ function issueCard(card: CarriedIssue, width: number): THREE.Mesh {
   g.fillRect(0, 0, W, H);
   g.fillStyle = '#2b2d42';
   g.font = `900 52px ${FONT}`;
-  g.fillText(`#${card.issue}`, 22, 84);
+  g.fillText(issueRef(card.issue), 22, 84);
   g.font = `700 28px ${FONT}`;
   wrap(g, card.title, W - 44, 4).forEach((line, i) => g.fillText(line, 22, 128 + i * 30));
   g.beginPath();

@@ -12,10 +12,13 @@ import { commentBox } from './comment-box';
 import { labelButton, labelChip } from './labels';
 import { avatar, commentCard, errorBox, nodes, spinnerRow } from './pieces';
 import { issueContext, issuePrompt, type BoardActions } from './prompts';
+import { openTicket } from '../jira/ticket';
 
 // ---- The issue window -----------------------------------------------------------------------------
 
 export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
+  // A ticket on the Jira board has a window of its own.
+  if (first.jira) return openTicket(first, net, actions);
   let it = first;
   const itemUrl = it.url;
   let detail: GhIssueDetail | null = null;

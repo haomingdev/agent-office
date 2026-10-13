@@ -9,6 +9,7 @@ import { confirmDialog } from './prompt';
 import { providerPicker } from './provider';
 import { officePrompt } from './prompts';
 import { issueVars } from './github/prompts';
+import { jiraIssue, ticketMeeting } from './jira/prompts';
 import { dictateField } from './dictate';
 
 /** What a meeting called from an issue, a PR or a task starts out with. */
@@ -28,6 +29,8 @@ export interface MeetingActions {
 
 /** A meeting about a GitHub issue: the form filled in with it. */
 export function issueMeeting(n: number, title: string): MeetingPreset {
+  const ticket = jiraIssue(n);
+  if (ticket) return ticketMeeting(ticket);
   return { issue: n, title: `#${n} ${title}`, prompt: officePrompt('issue.meeting', issueVars({ number: n, title })) };
 }
 

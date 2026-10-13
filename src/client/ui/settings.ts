@@ -7,6 +7,7 @@ import type { ThemePick, WebhookKind } from '../../shared/protocol';
 import { THEME_PICKS } from '../../shared/theme';
 import { mapChoices } from '../../shared/maps';
 import { dogSetting } from './settings-dog';
+import { jiraSetting } from './jira/settings';
 import { h, openModal, timeAgo } from './dom';
 import { words } from './forge';
 import { agentFields, choiceLabel, officeChoice } from './provider';
@@ -31,7 +32,7 @@ const PANES: { id: SettingsPane; icon: string; label: string; blurb: string }[] 
   { id: 'you', icon: '🧍', label: 'You', blurb: 'How you look, how you see the office, and how you’re signed in.' },
   { id: 'sound', icon: '🔊', label: 'Sound & voice', blurb: 'How loud the office is for you, and how voice chat works.' },
   { id: 'notify', icon: '🔔', label: 'Notifications', blurb: 'Hear about a worker that needs someone, or finished, while you’re somewhere else.' },
-  { id: 'building', icon: '🏢', label: 'Building', blurb: 'The map, the decorations, the sky, the dog, and where new floors are cloned.' },
+  { id: 'building', icon: '🏢', label: 'Building', blurb: 'The map, the decorations, the sky, the dog, where new floors are cloned, and the Jira board.' },
   { id: 'workers', icon: '🤖', label: 'Workers', blurb: 'What workers start on, how many run at once, when they go home and what the office tells them.' },
 ];
 
@@ -442,6 +443,8 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
 
   // Whether workers may be hired to skip their permission prompts, for everyone (see settings-skip.ts).
   const skip = skipPermissionsSetting(net, (body) => setting(SKIP_SETTING, 'office', ...body));
+  // Whether every floor's issues board is a Jira board, and which (see jira/settings.ts).
+  const jira = jiraSetting(net, (body) => setting('Jira board', 'office', ...body));
 
   // What the sky's doing, and which clock it keeps (see settings-sky.ts).
   const sky = outside && outsideSetting(net, outside, (body) => setting('Outside', 'office', ...body));
@@ -472,6 +475,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
       ...(sky ? [sky.section] : []),
       dogSection,
       setting('Workspace folder', 'office', dirRow, dirActions, dirNote),
+      jira.section,
     ],
     workers: [
       setting('Default worker', 'office', agentNow, agent.element, agentActions, agentNote),
@@ -529,6 +533,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     onClose: () => {
       offNotify();
       offDog();
+      jira.off();
       offTheme();
       sky?.off();
       offMap();

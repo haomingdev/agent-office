@@ -14,7 +14,7 @@ import { store } from '../../state';
 import { openAccounts } from '../../ui/accounts';
 import { openBoard } from '../../ui/boards';
 import { STATUS_LABEL, toast } from '../../ui/dom';
-import { words } from '../../ui/forge';
+import { issueRef, words } from '../../ui/forge';
 import { paletteOpen, togglePalette, type PaletteEntry } from '../../ui/palette';
 import { openIssue, openPull } from '../../ui/pull';
 import { openServices, serviceUrl } from '../../ui/services';
@@ -124,7 +124,7 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
         at('issues', 'the Issues board', {
           icon: '📌',
           kind: 'Issue',
-          title: `#${issue.number} ${issue.title}`,
+          title: `${issueRef(issue.number)} ${issue.title}`,
           detail: [issue.state.toLowerCase(), ...issue.labels.map((l) => l.name), issue.author].join(' · '),
           open: () => openIssue(issue, net, actions.boardActions()),
         }),

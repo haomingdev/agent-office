@@ -27,6 +27,7 @@ import type { LeaveOnMerge } from '../leave-on-merge.js';
 import type { SkipPermissions } from '../skip-permissions.js';
 import type { ChatLog } from '../history.js';
 import type { Arcade, HighScores } from '../cabinet.js';
+import type { Jira } from '../jira/index.js';
 import type { AgentProvider, FloorInfo, Me, ServerMsg, ServiceInfo, ServicesState, SignInKind } from '../../shared/protocol.js';
 import type { Client } from './client.js';
 import type { Spot } from './input.js';
@@ -72,6 +73,8 @@ export interface BuildingServices {
   accountLimits: Map<string, { key: string; reader: PlanLimitsReader }>;
   webhook: Webhook;
   machine: Machine;
+  /** The Jira board, when it's every floor's issues board (see jira/). */
+  jira: Jira;
   /** Whose plan `c` sees: their own, on an account with its own Claude sign-in; else the office's. */
   limitsOf(c: Client): PlanLimitsReader;
   /** Queues everywhere may be waiting for room under the worker limit: let them look again. */

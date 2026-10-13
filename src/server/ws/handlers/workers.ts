@@ -1,6 +1,7 @@
 // Workers at their desks and the board agents at their kiosks: hiring them, their terminals, their
 // worktrees and pull requests.
 import { forgeWords } from '../../../shared/floors.js';
+import { issueName } from '../../../shared/jira.js';
 import { MAX_REPOS, type RepoSource } from '../../workers.js';
 import { OPEN_CODE_MODEL_MAX } from '../../../shared/providers.js';
 import { isAgentEffort, isAgentProvider, type WorkerClientMsg } from '../../../shared/protocol.js';
@@ -41,7 +42,7 @@ export const workerHandlers = {
       const issue = kind === 'agent' ? issueNumber(msg.issue) : undefined;
       const across = repos.length ? ` across ${[floor.def.name, ...repos.map((x) => x.name)].join(' + ')}` : '';
       if (typeof r === 'string') ctx.warn(c, r);
-      else ctx.toastFloor(floor, kind === 'shell' ? `${who} opened a shell at a desk` : `${who} hired ${r.name}${issue ? ` for issue #${issue}` : r.prompt ? ' with a task' : ''}${across}`);
+      else ctx.toastFloor(floor, kind === 'shell' ? `${who} opened a shell at a desk` : `${who} hired ${r.name}${issue ? ` for ${issueName(floor.forge.issues.items, issue)}` : r.prompt ? ' with a task' : ''}${across}`);
       if (typeof r !== 'string' && issue) ctx.takeIssue(c, floor, issue);
     };
     // Every project it gets a worktree of starts from what's on GitHub.
@@ -121,7 +122,7 @@ export const workerHandlers = {
     ctx.warn(c, err);
     const issue = w?.info.kind === 'agent' ? issueNumber(msg.issue) : undefined;
     if (w && !err && issue) {
-      ctx.toastFloor(w.floor, `${who} handed issue #${issue} to ${w.info.name}`);
+      ctx.toastFloor(w.floor, `${who} handed ${issueName(w.floor.forge.issues.items, issue)} to ${w.info.name}`);
       ctx.takeIssue(c, w.floor, issue);
     }
   },

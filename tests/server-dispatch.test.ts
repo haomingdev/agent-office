@@ -268,7 +268,8 @@ test('welcomes a browser and dispatches what it sends', async () => {
   assert.equal(ada?.name, 'Ada');
   assert.equal(ada?.color, '#ff8a5b');
   assert.equal(ada?.floor, floor.id);
-  assert.deepEqual(Object.keys(welcome).slice(-17), ['floor', 'project', 'workers', 'issues', 'pulls', 'queue', 'decor', 'plan', 'services', 'dog', 'ball', 'cars', 'jail', 'jukebox', 'whiteboard', 'meeting', 'cabinet']);
+  assert.deepEqual(Object.keys(welcome).slice(-18), ['floor', 'project', 'workers', 'issues', 'pulls', 'queue', 'decor', 'plan', 'services', 'dog', 'ball', 'cars', 'jail', 'jukebox', 'whiteboard', 'meeting', 'cabinet', 'jira']);
+  assert.deepEqual(welcome.jira, { on: false, columns: [] });
 
   a.send({ t: 'ping', at: 42 });
   const pong = await a.take('pong');
@@ -434,6 +435,22 @@ test('settings, accounts, sign-ins and the boards answer as before', async () =>
     a.send({ t, which: 'github' });
     await warned("On the shared office password, workers run on the office's own sign-ins");
   }
+
+  // The Jira board: off until it's set up, and on the shared password your Jira is the office's.
+  a.send({ t: 'jira.get' });
+  assert.deepEqual((await a.take('jira.you')).state, { status: 'none', office: true });
+  a.send({ t: 'jira.config', on: true, url: 'https://example.com/boards/1' });
+  await warned('The office works with Jira Cloud boards, at https://<your-site>.atlassian.net');
+  a.send({ t: 'jira.config', on: true });
+  await warned("Paste the board's link first");
+  a.send({ t: 'jira.signin', email: 'eve@example.com', token: 'x'.repeat(24) });
+  await warned("On the shared password, the office's own Jira token is everyone's: set it in ⚙️ Settings → Building → Jira");
+  a.send({ t: 'jira.move', key: 'not a key', transition: '1' });
+  await warned('Not a Jira ticket');
+  a.send({ t: 'jira.comment', key: 'CHAT-1', body: ' ' });
+  assert.deepEqual(await a.take('jira.done'), { t: 'jira.done', key: 'CHAT-1', op: 'comment', error: 'Write something first' });
+  a.send({ t: 'jira.assign', key: 'CHAT-1', accountId: null });
+  assert.deepEqual(await a.take('jira.done'), { t: 'jira.done', key: 'CHAT-1', op: 'assign', error: 'The Jira board is off' });
 
   a.send({ t: 'gh.merge', number: 0, method: 'squash', deleteBranch: false });
   a.send({ t: 'gh.close', kind: 'nope', number: 3 });
