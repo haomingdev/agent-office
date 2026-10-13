@@ -261,6 +261,7 @@ test('welcomes a browser and dispatches what it sends', async () => {
   assert.equal(welcome.project?.name, floor.project.name);
   assert.deepEqual(welcome.me, { admin: true });
   assert.deepEqual(welcome.workers, []);
+  assert.deepEqual(welcome.skipPermissions, { on: false });
   assert.equal(welcome.floors.length, 1);
   assert.equal(welcome.floors[0].id, floor.id);
   const ada = welcome.peers.find((p) => p.id === welcome.you);
@@ -305,6 +306,19 @@ test('welcomes a browser and dispatches what it sends', async () => {
     assert.equal((await who.take('leaveOnMerge')).state.on, true);
     assert.match((await who.take('toast', (m) => m.text.includes('go home'))).text, /^🏠 Ada L set workers to go home/);
   }
+
+  // Nobody is hired to skip their permission prompts until an admin lets workers in ⚙️ Settings.
+  a.send({ t: 'worker.spawn', deskId: 'desk-3', prompt: 'go', skipPermissions: true });
+  assert.match((await a.take('toast', (m) => m.level === 'warn')).text, /turned off in ⚙️ Settings/);
+  assert.deepEqual(floor.workers.list(), []);
+  a.send({ t: 'skipPermissions.set', on: true });
+  for (const who of [a, b]) {
+    assert.equal((await who.take('skipPermissions')).state.on, true);
+    assert.match((await who.take('toast', (m) => m.text.startsWith('⚡'))).text, /^⚡ Ada L let workers be hired to skip/);
+  }
+  a.send({ t: 'skipPermissions.set', on: false });
+  assert.equal((await a.take('skipPermissions')).state.on, false);
+  assert.match((await a.take('toast', (m) => m.text.startsWith('🛡️'))).text, /ask again once they restart$/);
 
   // Only for Ada: a floor that isn't there, sign-ins on the shared password, and the accounts list.
   a.send({ t: 'floor.go', floor: 'nope' });

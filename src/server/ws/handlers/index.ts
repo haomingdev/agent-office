@@ -18,6 +18,7 @@ import { queueHandlers, queueView } from './queue.js';
 import { rooftopHandlers } from './rooftop.js';
 import { servicesView, settingsHandlers } from './settings.js';
 import { signinsHandlers } from './signins.js';
+import { skipPermissionsHandlers } from './skip-permissions.js';
 import { teamHandlers } from './team.js';
 import { usageHandlers } from './usage.js';
 import { whiteboardHandlers, whiteboardHooks, whiteboardView } from './whiteboard.js';
@@ -43,6 +44,7 @@ export const handlers: HandlerMap<ClientMsg> = {
   ...rooftopHandlers,
   ...settingsHandlers,
   ...signinsHandlers,
+  ...skipPermissionsHandlers,
   ...teamHandlers,
   ...usageHandlers,
   ...whiteboardHandlers,

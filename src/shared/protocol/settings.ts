@@ -170,6 +170,17 @@ export interface LeaveOnMergeState {
   at?: number;
 }
 
+/**
+ * Whether workers may be hired to skip their permission prompts (⚙️ Settings, admins only), for every
+ * floor: off, nobody can be, and nobody hired that way starts like that again (see server/skip-permissions.ts).
+ */
+export interface SkipPermissionsState {
+  on: boolean;
+  /** Who set it, and when. Unset for the default (off). */
+  by?: string;
+  at?: number;
+}
+
 export type SettingsClientMsg =
   /** Set the office's Slack / Discord webhook; '' removes it. */
   | { t: 'notify.webhook'; url: string }
@@ -202,3 +213,10 @@ export type SettingsServerMsg =
   | { t: 'map'; state: MapState }
   | { t: 'prompts'; state: PromptsState }
   | { t: 'leaveOnMerge'; state: LeaveOnMergeState };
+
+/** ⚡ Skip permission prompts, which has handlers of its own (ws/handlers/skip-permissions.ts). */
+export type SkipPermissionsClientMsg =
+  /** Admins: workers may be hired to skip their permission prompts (true), or not. */
+  { t: 'skipPermissions.set'; on: boolean };
+
+export type SkipPermissionsServerMsg = { t: 'skipPermissions'; state: SkipPermissionsState };

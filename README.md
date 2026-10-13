@@ -93,6 +93,8 @@ agent-office setup                          # the first-start walkthrough again 
 
 Every option is in [docs/configuration.md](docs/configuration.md). Choosing models and providers per worker is in [docs/agents.md](docs/agents.md).
 
+Workers ask before they run a command. An admin can let them skip that in ⚙️ Settings → **🤖 Workers** → **Let workers skip permission prompts**: the hire window then offers **⚡ Skip permission prompts** for Claude Code, Codex and Cursor workers. Such a worker runs anything on the office's machine without asking, so give it its own worktree ([docs/agents.md](docs/agents.md#skipping-permission-prompts)). `--agent-args "--dangerously-skip-permissions"` still does it office-wide.
+
 To run it from a clone instead:
 
 ```bash
